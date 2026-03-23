@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson Planning Tool</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/modal.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>📚 Lesson Planning Tool</h1>
+                <div class="header-controls">
+                    <button class="btn btn-primary" id="uploadBtn">Upload ICS File</button>
+                    <button class="btn btn-secondary" id="logoutBtn" style="display: none;">Logout</button>
+                    <span id="userEmail" class="user-email"></span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Authentication Section -->
+        <div id="authSection" class="auth-section">
+            <div class="auth-container">
+                <h2>Sign In</h2>
+                
+                <!-- Google Sign-In Button -->
+                <button class="btn btn-google" id="googleSignInBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m.31-8.86c-1.77-.45-2.34-.7-2.34-1.45 0-.66.52-1.2 1.48-1.2.96 0 1.88.35 2.64.74l.92-1.64C13.99 4.2 13.01 3.6 11.6 3.6 9.69 3.6 8.2 4.95 8.2 6.7c0 1.37.72 2.25 2.65 2.9.9.3 1.18.56 1.18 1.1 0 .5-.41 1.03-1.41 1.03-.9 0-1.64-.28-2.5-.73l-.97 1.54C8.56 13.75 9.5 14.4 11.02 14.4c1.95 0 3.46-1.2 3.46-3.05 0-1.42-.8-2.26-2.17-2.81z"/>
+                    </svg>
+                    Sign in with Google
+                </button>
+                
+                <p class="auth-note">Using Firebase Authentication with Google Sign-In</p>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Section -->
+        <main id="mainSection" class="main-section" style="display: none;">
+            <!-- Week Navigation -->
+            <div class="week-navigation">
+                <button class="btn btn-nav" id="prevWeekBtn">← Previous Week</button>
+                <span class="week-display" id="weekDisplay">Week of Mon, Mar 24 - Sun, Mar 30</span>
+                <button class="btn btn-nav" id="nextWeekBtn">Next Week →</button>
+            </div>
+
+            <!-- Filter Controls -->
+            <div class="filter-controls">
+                <input type="text" id="filterInput" placeholder="Search lessons..." class="search-input">
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="physics">Physics</button>
+                    <button class="filter-btn" data-filter="practical">Practical</button>
+                    <button class="filter-btn" data-filter="meeting">Meetings</button>
+                </div>
+            </div>
+
+            <!-- Lessons Grid -->
+            <div class="lessons-container" id="lessonsContainer">
+                <div class="loading">Loading lessons...</div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Hidden File Input -->
+    <input type="file" id="icsFileInput" accept=".ics" style="display: none;">
+
+    <!-- Lesson Detail Modal -->
+    <div id="lessonModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="modalTitle">Lesson Details</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <!-- Lesson Info Section -->
+                <div class="lesson-info-section">
+                    <div class="info-group">
+                        <label>Lesson Name:</label>
+                        <p id="lessonName" class="info-value"></p>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-group">
+                            <label>Date & Time:</label>
+                            <p id="lessonDateTime" class="info-value"></p>
+                        </div>
+                        <div class="info-group">
+                            <label>Venue:</label>
+                            <p id="lessonVenue" class="info-value"></p>
+                        </div>
+                        <div class="info-group">
+                            <label>Class:</label>
+                            <p id="lessonClass" class="info-value"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lesson Plan Section -->
+                <div class="lesson-plan-section">
+                    <h3>Lesson Plan</h3>
+                    <div class="form-group">
+                        <label for="planTitle">Title:</label>
+                        <input type="text" id="planTitle" placeholder="Enter lesson plan title">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="planObjectives">Learning Objectives:</label>
+                        <textarea id="planObjectives" placeholder="What students should learn..." rows="4"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="planContent">Content / Notes:</label>
+                        <div class="editor-toolbar">
+                            <button class="toolbar-btn" data-action="bold" title="Bold">B</button>
+                            <button class="toolbar-btn" data-action="italic" title="Italic">I</button>
+                            <button class="toolbar-btn" data-action="link" title="Add Link">🔗</button>
+                            <button class="toolbar-btn" data-action="list" title="Bullet List">≡</button>
+                        </div>
+                        <textarea id="planContent" placeholder="Write your lesson content here. You can add links using the toolbar." rows="6"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="planResources">Resources & Links:</label>
+                        <div id="resourcesList" class="resources-list"></div>
+                        <button class="btn btn-small" id="addResourceBtn">+ Add Resource Link</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="planAssignment">Assignment:</label>
+                        <textarea id="planAssignment" placeholder="Homework or tasks..." rows="3"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="planNotes">Additional Notes:</label>
+                        <textarea id="planNotes" placeholder="Any additional notes..." rows="3"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="closeModalBtn">Close</button>
+                <button class="btn btn-primary" id="saveLessonBtn">Save Lesson Plan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resource Modal -->
+    <div id="resourceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Resource Link</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="resourceName">Resource Name:</label>
+                    <input type="text" id="resourceName" placeholder="e.g., Physics Notes PDF">
+                </div>
+                <div class="form-group">
+                    <label for="resourceUrl">URL:</label>
+                    <input type="url" id="resourceUrl" placeholder="https://example.com">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelResourceBtn">Cancel</button>
+                <button class="btn btn-primary" id="saveResourceBtn">Add Resource</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <script src="js/ics-parser.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/firebase-service.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
