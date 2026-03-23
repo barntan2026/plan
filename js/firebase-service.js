@@ -283,4 +283,150 @@ class FirebaseService {
             throw new Error('Failed to batch update: ' + error.message);
         }
     }
+
+    /**
+     * Create a new manual lesson
+     */
+    static async createLesson(lessonData) {
+        try {
+            const user = auth.currentUser;
+            if (!user) throw new Error('User not authenticated');
+
+            // Generate unique ID for the lesson
+            const lessonId = db.collection('users').doc(user.uid)
+                .collection('lessons').doc().id;
+
+            const lessonsRef = db.collection('users').doc(user.uid)
+                .collection('lessons').doc(lessonId);
+
+            await lessonsRef.set({
+                uid: lessonId,
+                summary: lessonData.summary,
+                dtstart: new Date(lessonData.dtstart),
+                dtend: new Date(lessonData.dtend),
+                location: lessonData.location || '',
+                description: lessonData.description || '',
+                isManual: true,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            return lessonId;
+        } catch (error) {
+            throw new Error('Failed to create lesson: ' + error.message);
+        }
+    }
+
+    /**
+     * Update an existing lesson
+     */
+    static async updateLesson(lessonId, lessonData) {
+        try {
+            const user = auth.currentUser;
+            if (!user) throw new Error('User not authenticated');
+
+            const lessonsRef = db.collection('users').doc(user.uid)
+                .collection('lessons').doc(lessonId);
+
+            await lessonsRef.set({
+                summary: lessonData.summary,
+                dtstart: new Date(lessonData.dtstart),
+                dtend: new Date(lessonData.dtend),
+                location: lessonData.location || '',
+                description: lessonData.description || '',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            return lessonId;
+        } catch (error) {
+            throw new Error('Failed to update lesson: ' + error.message);
+        }
+    }
+
+    /**
+     * Delete a lesson
+     */
+    static async deleteLesson(lessonId) {
+        try {
+            const user = auth.currentUser;
+            if (!user) throw new Error('User not authenticated');
+
+            await db.collection('users').doc(user.uid)
+                .collection('lessons').doc(lessonId).delete();
+
+            return true;
+        } catch (error) {
+            throw new Error('Failed to delete lesson: ' + error.message);
+        }
+    }
+
+    /**
+     * Get all manual lessons
+     */
+    static async getManualLessons() {
+        try {
+            const user = auth.currentUser;
+            if (!user) return [];
+
+            const snapshot = await db.collection('users').doc(user.uid)
+                .collection('lessons').get();
+
+            const lessons = [];
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                lessons.push({
+                    ...data,
+                    uid: doc.id,
+                    dtstart: this.timestampToDate(data.dtstart),
+                    dtend: this.timestampToDate(data.dtend)
+                });
+            });
+
+            return lessons;
+        } catch (error) {
+            if (error.code === 'permission-denied') {
+                return [];
+            }
+            console.error('Failed to get manual lessons:', error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Watch for real-time updates to manual lessons
+     */
+    static watchManualLessons(callback) {
+        try {
+            const user = auth.currentUser;
+            if (!user) {
+                callback([]);
+                return null;
+            }
+
+            return db.collection('users').doc(user.uid)
+                .collection('lessons')
+                .onSnapshot(snapshot => {
+                    const lessons = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        lessons.push({
+                            ...data,
+                            uid: doc.id,
+                            dtstart: this.timestampToDate(data.dtstart),
+                            dtend: this.timestampToDate(data.dtend)
+                        });
+                    });
+                    callback(lessons);
+                }, error => {
+                    if (error.code === 'permission-denied') {
+                        callback([]);
+                        return;
+                    }
+                    console.error('Error watching manual lessons:', error);
+                });
+        } catch (error) {
+            console.error('Failed to watch manual lessons:', error.message);
+            return null;
+        }
+    }
 }

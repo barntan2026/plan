@@ -17,9 +17,15 @@ class UIService {
         this.resourceModal = document.getElementById('resourceModal');
         this.resourceClose = this.resourceModal.querySelector('.close');
         
+        // Initialize button states
+        const saveLessonBtn = document.getElementById('saveLessonBtn');
+        saveLessonBtn.dataset.mode = 'plan';
+        
         // Setup event listeners
         this.setupModalListeners();
         this.setupEditorToolbar();
+        this.setupDeleteLessonHandler();
+        this.setupSaveLessonHandler();
     }
     
     setupModalListeners() {
@@ -88,13 +94,46 @@ class UIService {
     
     openLessonModal(lesson, existingPlan = null) {
         this.currentLessonId = lesson.uid;
+        this.currentLesson = lesson;
         
-        // Set lesson info
-        document.getElementById('lessonName').textContent = lesson.summary;
-        document.getElementById('lessonDateTime').textContent = 
-            `${lesson.dtstart.toLocaleDateString()} ${lesson.dtstart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${lesson.dtend.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-        document.getElementById('lessonVenue').textContent = lesson.location || 'Not specified';
-        document.getElementById('lessonClass').textContent = lesson.description || 'N/A';
+        const isManual = lesson.isManual === true;
+        const readOnlySection = document.getElementById('readOnlyLessonInfo');
+        const editableSection = document.getElementById('editableLessonInfo');
+        const deleteBtn = document.getElementById('deleteLessonBtn');
+        const saveLessonBtn = document.getElementById('saveLessonBtn');
+        
+        if (isManual) {
+            // Show editable fields for manual lessons
+            readOnlySection.style.display = 'none';
+            editableSection.style.display = 'block';
+            deleteBtn.style.display = 'block';
+            saveLessonBtn.textContent = 'Update Lesson';
+            saveLessonBtn.dataset.mode = 'edit';
+            
+            // Populate editable fields
+            document.getElementById('lessonSummary').value = lesson.summary;
+            document.getElementById('lessonDate').value = lesson.dtstart.toISOString().split('T')[0];
+            document.getElementById('lessonStartTime').value = 
+                `${String(lesson.dtstart.getHours()).padStart(2, '0')}:${String(lesson.dtstart.getMinutes()).padStart(2, '0')}`;
+            document.getElementById('lessonEndTime').value = 
+                `${String(lesson.dtend.getHours()).padStart(2, '0')}:${String(lesson.dtend.getMinutes()).padStart(2, '0')}`;
+            document.getElementById('lessonLocation').value = lesson.location || '';
+            document.getElementById('lessonDescription').value = lesson.description || '';
+        } else {
+            // Show read-only fields for ICS lessons
+            readOnlySection.style.display = 'block';
+            editableSection.style.display = 'none';
+            deleteBtn.style.display = 'none';
+            saveLessonBtn.textContent = 'Save Lesson Plan';
+            saveLessonBtn.dataset.mode = 'plan';
+            
+            // Set lesson info (read-only)
+            document.getElementById('lessonName').textContent = lesson.summary;
+            document.getElementById('lessonDateTime').textContent = 
+                `${lesson.dtstart.toLocaleDateString()} ${lesson.dtstart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${lesson.dtend.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+            document.getElementById('lessonVenue').textContent = lesson.location || 'Not specified';
+            document.getElementById('lessonClass').textContent = lesson.description || 'N/A';
+        }
         
         // Load existing plan if available
         if (existingPlan) {
@@ -119,11 +158,60 @@ class UIService {
         this.lessonModal.classList.add('show');
         document.body.style.overflow = 'hidden';
     }
+
+    openLessonModalForCreate() {
+        this.currentLessonId = null;
+        this.currentLesson = null;
+        
+        const readOnlySection = document.getElementById('readOnlyLessonInfo');
+        const editableSection = document.getElementById('editableLessonInfo');
+        const deleteBtn = document.getElementById('deleteLessonBtn');
+        const saveLessonBtn = document.getElementById('saveLessonBtn');
+        
+        // Show editable fields for new lesson creation
+        readOnlySection.style.display = 'none';
+        editableSection.style.display = 'block';
+        deleteBtn.style.display = 'none';
+        
+        // Set default values
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        document.getElementById('lessonSummary').value = '';
+        document.getElementById('lessonDate').value = tomorrow.toISOString().split('T')[0];
+        document.getElementById('lessonStartTime').value = '09:00';
+        document.getElementById('lessonEndTime').value = '10:00';
+        document.getElementById('lessonLocation').value = '';
+        document.getElementById('lessonDescription').value = '';
+        
+        // Clear lesson plan section
+        document.getElementById('planTitle').value = '';
+        document.getElementById('planObjectives').value = '';
+        document.getElementById('planContent').value = '';
+        document.getElementById('planAssignment').value = '';
+        document.getElementById('planNotes').value = '';
+        document.getElementById('resourcesList').innerHTML = '';
+        
+        // Change button text temporarily
+        const originalBtn = saveLessonBtn.textContent;
+        saveLessonBtn.textContent = 'Create Lesson';
+        saveLessonBtn.dataset.mode = 'create';
+        
+        this.lessonModal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
     
     closeLessonModal() {
         this.lessonModal.classList.remove('show');
         document.body.style.overflow = 'auto';
         this.currentLessonId = null;
+        this.currentLesson = null;
+        
+        // Reset button text and mode
+        const saveLessonBtn = document.getElementById('saveLessonBtn');
+        saveLessonBtn.textContent = 'Save Lesson Plan';
+        saveLessonBtn.dataset.mode = 'plan';
     }
     
     getLessonPlanData() {
@@ -312,6 +400,62 @@ class UIService {
         const endStr = weekEnd.toLocaleDateString('en-US', options);
         
         document.getElementById('weekDisplay').textContent = `Week of ${startStr} - ${endStr}`;
+    }
+
+    getLessonData() {
+        return {
+            summary: document.getElementById('lessonSummary').value,
+            location: document.getElementById('lessonLocation').value,
+            description: document.getElementById('lessonDescription').value,
+            dtstart: new Date(`${document.getElementById('lessonDate').value}T${document.getElementById('lessonStartTime').value}`),
+            dtend: new Date(`${document.getElementById('lessonDate').value}T${document.getElementById('lessonEndTime').value}`)
+        };
+    }
+
+    setupDeleteLessonHandler() {
+        const deleteBtn = document.getElementById('deleteLessonBtn');
+        deleteBtn.removeEventListener('click', this.deleteLessonHandler);
+        this.deleteLessonHandler = async () => {
+            if (this.currentLessonId && this.currentLesson?.isManual) {
+                await appInstance.deleteLesson(this.currentLessonId);
+            }
+        };
+        deleteBtn.addEventListener('click', this.deleteLessonHandler);
+    }
+
+    setupSaveLessonHandler() {
+        const saveBtn = document.getElementById('saveLessonBtn');
+        saveBtn.removeEventListener('click', this.saveLessonHandler);
+        this.saveLessonHandler = async () => {
+            if (saveBtn.dataset.mode === 'create') {
+                // Create new lesson
+                const lessonData = this.getLessonData();
+                if (!lessonData.summary.trim()) {
+                    UIService.showToast('Lesson name is required', 'error');
+                    return;
+                }
+                try {
+                    const lessonId = await FirebaseService.createLesson(lessonData);
+                    UIService.showToast('Lesson created successfully', 'success');
+                    uiService.closeLessonModal();
+                } catch (error) {
+                    console.error('Create error:', error);
+                    UIService.showToast(error.message, 'error');
+                }
+            } else if (saveBtn.dataset.mode === 'edit') {
+                // Update existing lesson
+                const lessonData = this.getLessonData();
+                if (!lessonData.summary.trim()) {
+                    UIService.showToast('Lesson name is required', 'error');
+                    return;
+                }
+                await appInstance.updateLesson(this.currentLessonId, lessonData);
+            } else {
+                // Save lesson plan (original behavior)
+                await appInstance.saveLessonPlan();
+            }
+        };
+        saveBtn.addEventListener('click', this.saveLessonHandler);
     }
 }
 

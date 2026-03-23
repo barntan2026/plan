@@ -44,6 +44,7 @@ class LessonPlannerApp {
             document.getElementById('mainSection').style.display = 'block';
             document.getElementById('userEmail').textContent = user.email;
             document.getElementById('logoutBtn').style.display = 'block';
+            document.getElementById('addLessonBtn').style.display = 'block';
             
             // Load calendar data if exists
             const calendarData = await FirebaseService.getCalendarData();
@@ -55,6 +56,9 @@ class LessonPlannerApp {
             
             // Watch for lesson plan updates
             this.setupPlansListener();
+            
+            // Watch for manual lesson updates
+            this.setupManualLessonsListener();
             
         } catch (error) {
             console.error('Sign in error:', error);
@@ -103,6 +107,9 @@ class LessonPlannerApp {
             }
         });
         
+        // Add lesson
+        document.getElementById('addLessonBtn').addEventListener('click', () => this.handleAddLesson());
+        
         // Week navigation
         document.getElementById('prevWeekBtn').addEventListener('click', () => this.previousWeek());
         document.getElementById('nextWeekBtn').addEventListener('click', () => this.nextWeek());
@@ -114,9 +121,6 @@ class LessonPlannerApp {
         
         // Search
         document.getElementById('filterInput').addEventListener('input', (e) => this.filterLessons(e.target.value));
-        
-        // Lesson plan save
-        document.getElementById('saveLessonBtn').addEventListener('click', () => this.saveLessonPlan());
     }
     
     
@@ -296,6 +300,44 @@ class LessonPlannerApp {
         } catch (error) {
             console.error('Error loading calendar from Firebase:', error);
             this.showLessonsForWeek();
+        }
+    }
+
+    setupManualLessonsListener() {
+        this.manualLessonsUnsubscribe = FirebaseService.watchManualLessons((lessons) => {
+            // Merge manual lessons with ICS lessons
+            this.expandedEvents = [...this.allEvents, ...lessons];
+            this.showLessonsForWeek();
+        });
+    }
+
+    async handleAddLesson() {
+        // Open modal in lesson creation mode
+        const uiService = new UIService();
+        uiService.openLessonModalForCreate();
+    }
+
+    async updateLesson(lessonId, lessonData) {
+        try {
+            await FirebaseService.updateLesson(lessonId, lessonData);
+            UIService.showToast('Lesson updated successfully', 'success');
+            uiService.closeLessonModal();
+        } catch (error) {
+            console.error('Update error:', error);
+            UIService.showToast(error.message, 'error');
+        }
+    }
+
+    async deleteLesson(lessonId) {
+        try {
+            if (confirm('Are you sure you want to delete this lesson?')) {
+                await FirebaseService.deleteLesson(lessonId);
+                UIService.showToast('Lesson deleted successfully', 'success');
+                uiService.closeLessonModal();
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+            UIService.showToast(error.message, 'error');
         }
     }
 }

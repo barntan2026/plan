@@ -282,6 +282,53 @@
     background: #dc2626;
 }
 
+/* Lesson Edit Section */
+.lesson-detail-section {
+    margin-bottom: 20px;
+}
+
+.lesson-edit-section {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    background: var(--surface-color);
+}
+
+.lesson-edit-section h3 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    color: var(--primary-color);
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 768px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.form-group input[type="date"],
+.form-group input[type="time"] {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.form-group input[type="date"]:focus,
+.form-group input[type="time"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
 /* Responsive Modal */
 @media (max-width: 768px) {
     .modal-content {

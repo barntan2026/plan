@@ -16,6 +16,7 @@
                 <h1>📚 Lesson Planning Tool</h1>
                 <div class="header-controls">
                     <button class="btn btn-primary" id="uploadBtn">Upload ICS File</button>
+                    <button class="btn btn-primary" id="addLessonBtn" style="display: none;">+ Add Lesson</button>
                     <button class="btn btn-secondary" id="logoutBtn" style="display: none;">Logout</button>
                     <span id="userEmail" class="user-email"></span>
                 </div>
@@ -77,24 +78,58 @@
                 <span class="close">&times;</span>
             </div>
             <div class="modal-body">
-                <!-- Lesson Info Section -->
-                <div class="lesson-info-section">
-                    <div class="info-group">
-                        <label>Lesson Name:</label>
-                        <p id="lessonName" class="info-value"></p>
+                <!-- Lesson Info Section - Can be edited for manual lessons -->
+                <div id="lessonDetailSection" class="lesson-detail-section">
+                    <div class="lesson-info-section" id="readOnlyLessonInfo">
+                        <div class="info-group">
+                            <label>Lesson Name:</label>
+                            <p id="lessonName" class="info-value"></p>
+                        </div>
+                        <div class="info-row">
+                            <div class="info-group">
+                                <label>Date & Time:</label>
+                                <p id="lessonDateTime" class="info-value"></p>
+                            </div>
+                            <div class="info-group">
+                                <label>Venue:</label>
+                                <p id="lessonVenue" class="info-value"></p>
+                            </div>
+                            <div class="info-group">
+                                <label>Class:</label>
+                                <p id="lessonClass" class="info-value"></p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="info-row">
-                        <div class="info-group">
-                            <label>Date & Time:</label>
-                            <p id="lessonDateTime" class="info-value"></p>
+
+                    <div class="lesson-edit-section" id="editableLessonInfo" style="display: none;">
+                        <h3>Lesson Details</h3>
+                        <div class="form-group">
+                            <label for="lessonSummary">Lesson Name:</label>
+                            <input type="text" id="lessonSummary" placeholder="e.g., Physics - Chapter 1">
                         </div>
-                        <div class="info-group">
-                            <label>Venue:</label>
-                            <p id="lessonVenue" class="info-value"></p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="lessonDate">Date:</label>
+                                <input type="date" id="lessonDate">
+                            </div>
+                            <div class="form-group">
+                                <label for="lessonStartTime">Start Time:</label>
+                                <input type="time" id="lessonStartTime">
+                            </div>
+                            <div class="form-group">
+                                <label for="lessonEndTime">End Time:</label>
+                                <input type="time" id="lessonEndTime">
+                            </div>
                         </div>
-                        <div class="info-group">
-                            <label>Class:</label>
-                            <p id="lessonClass" class="info-value"></p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="lessonLocation">Venue:</label>
+                                <input type="text" id="lessonLocation" placeholder="e.g., Lab A">
+                            </div>
+                            <div class="form-group">
+                                <label for="lessonDescription">Class:</label>
+                                <input type="text" id="lessonDescription" placeholder="e.g., 4A">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -141,6 +176,7 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <button class="btn btn-danger" id="deleteLessonBtn" style="display: none;">Delete Lesson</button>
                 <button class="btn btn-secondary" id="closeModalBtn">Close</button>
                 <button class="btn btn-primary" id="saveLessonBtn">Save Lesson Plan</button>
             </div>
