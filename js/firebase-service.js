@@ -186,7 +186,17 @@ class FirebaseService {
                 .collection('calendars').doc('default').get();
             
             if (calendarDoc.exists) {
-                return calendarDoc.data();
+                const data = calendarDoc.data();
+                // Ensure events array exists
+                if (data.events && Array.isArray(data.events)) {
+                    // Convert Firestore Timestamp objects to Date objects
+                    data.events = data.events.map(e => ({
+                        ...e,
+                        dtstart: e.dtstart?.toDate ? e.dtstart.toDate() : new Date(e.dtstart),
+                        dtend: e.dtend?.toDate ? e.dtend.toDate() : new Date(e.dtend)
+                    }));
+                }
+                return data;
             }
             return null;
         } catch (error) {

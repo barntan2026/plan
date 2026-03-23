@@ -9,6 +9,9 @@ class LessonPlannerApp {
         this.currentFilter = 'all';
         this.authUnsubscribe = null;
         this.plansUnsubscribe = null;
+        this.manualLessonsUnsubscribe = null;
+        this.mobileDayOffset = 0; // 0 = Monday, 1 = Tuesday, etc.
+        this.currentTimeUpdateInterval = null;
     }
     
     async init() {
@@ -48,7 +51,7 @@ class LessonPlannerApp {
             
             // Load calendar data if exists
             const calendarData = await FirebaseService.getCalendarData();
-            if (calendarData && calendarData.icsContent) {
+            if (calendarData && calendarData.events && calendarData.events.length > 0) {
                 this.loadCalendarFromFirebase(calendarData);
             } else {
                 this.showLessonsForWeek();
@@ -73,9 +76,12 @@ class LessonPlannerApp {
         document.getElementById('userEmail').textContent = '';
         document.getElementById('logoutBtn').style.display = 'none';
         
-        // Unsubscribe from plans listener
+        // Unsubscribe from listeners
         if (this.plansUnsubscribe) {
             this.plansUnsubscribe();
+        }
+        if (this.manualLessonsUnsubscribe) {
+            this.manualLessonsUnsubscribe();
         }
         
         // Clear data
@@ -121,6 +127,10 @@ class LessonPlannerApp {
         
         // Search
         document.getElementById('filterInput').addEventListener('input', (e) => this.filterLessons(e.target.value));
+        
+        // Mobile navigation
+        document.getElementById('mobilePrevDayBtn').addEventListener('click', () => this.mobilePreviousDay());
+        document.getElementById('mobileNextDayBtn').addEventListener('click', () => this.mobileNextDay());
     }
     
     
@@ -221,11 +231,13 @@ class LessonPlannerApp {
         }
         
         this.currentWeekStart = newWeekStart;
+        this.mobileDayOffset = 0;
         this.showLessonsForWeek();
     }
     
     nextWeek() {
         this.currentWeekStart.setDate(this.currentWeekStart.getDate() + 7);
+        this.mobileDayOffset = 0;
         this.showLessonsForWeek();
     }
     
@@ -252,6 +264,10 @@ class LessonPlannerApp {
         
         uiService.updateWeekDisplay(this.currentWeekStart);
         uiService.renderLessonsGrid(filteredLessons, this.allLessonPlans);
+        
+        // Also render mobile view
+        this.renderMobileView();
+        this.startCurrentTimeUpdater();
     }
     
     applyFilter(lessons) {
@@ -278,7 +294,7 @@ class LessonPlannerApp {
     
     async saveLessonPlan() {
         try {
-            if (!this.uiService?.currentLessonId) {
+            if (!uiService.currentLessonId) {
                 UIService.showToast('No lesson selected', 'error');
                 return;
             }
@@ -303,27 +319,32 @@ class LessonPlannerApp {
     loadCalendarFromFirebase(calendarData) {
         try {
             // Parse stored events - handle Firestore Timestamps and Date objects
-            this.expandedEvents = calendarData.events.map(e => ({
+            this.allEvents = calendarData.events.map(e => ({
                 uid: e.uid,
                 summary: e.summary,
                 location: e.location,
                 description: e.description,
-                dtstart: e.dtstart?.toDate ? e.dtstart.toDate() : new Date(e.dtstart),
-                dtend: e.dtend?.toDate ? e.dtend.toDate() : new Date(e.dtend),
-                rrule: e.rrule
+                dtstart: e.dtstart?.toDate ? e.dtstart.toDate() : (typeof e.dtstart === 'string' ? new Date(e.dtstart) : e.dtstart),
+                dtend: e.dtend?.toDate ? e.dtend.toDate() : (typeof e.dtend === 'string' ? new Date(e.dtend) : e.dtend),
+                rrule: e.rrule,
+                isManual: false
             }));
             
+            this.expandedEvents = [...this.allEvents];
+            UIService.showToast(`Loaded ${this.allEvents.length} events from ${calendarData.name}`, 'success');
             this.showLessonsForWeek();
         } catch (error) {
             console.error('Error loading calendar from Firebase:', error);
+            UIService.showToast('Error loading calendar data', 'error');
             this.showLessonsForWeek();
         }
     }
 
     setupManualLessonsListener() {
         this.manualLessonsUnsubscribe = FirebaseService.watchManualLessons((lessons) => {
-            // Merge manual lessons with ICS lessons
-            this.expandedEvents = [...this.allEvents, ...lessons];
+            // Merge manual lessons with ICS lessons (ensure allEvents is set)
+            const icsLessons = this.allEvents || [];
+            this.expandedEvents = [...icsLessons, ...lessons];
             this.showLessonsForWeek();
         });
     }
@@ -356,6 +377,122 @@ class LessonPlannerApp {
             console.error('Delete error:', error);
             UIService.showToast(error.message, 'error');
         }
+    }
+
+    // Mobile Navigation Methods
+    mobilePreviousDay() {
+        if (this.mobileDayOffset > 0) {
+            this.mobileDayOffset--;
+            this.renderMobileView();
+        }
+    }
+
+    mobileNextDay() {
+        if (this.mobileDayOffset < 4) { // Only Mon-Fri
+            this.mobileDayOffset++;
+            this.renderMobileView();
+        }
+    }
+
+    renderMobileView() {
+        const dayDate = new Date(this.currentWeekStart);
+        dayDate.setDate(dayDate.getDate() + this.mobileDayOffset);
+        
+        // Update day display
+        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const dateStr = dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        document.getElementById('mobileDayDisplay').textContent = `${dayNames[this.mobileDayOffset]}, ${dateStr}`;
+        
+        // Get lessons for this day
+        const dayStart = new Date(dayDate);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(dayDate);
+        dayEnd.setHours(23, 59, 59, 999);
+        
+        const dayLessons = this.expandedEvents.filter(event => {
+            const eventDate = new Date(event.dtstart);
+            eventDate.setHours(0, 0, 0, 0);
+            return eventDate.getTime() === dayStart.getTime();
+        }).sort((a, b) => a.dtstart - b.dtstart);
+        
+        // Group by time
+        const lessonsByTime = {};
+        dayLessons.forEach(lesson => {
+            const timeKey = lesson.dtstart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            if (!lessonsByTime[timeKey]) {
+                lessonsByTime[timeKey] = [];
+            }
+            lessonsByTime[timeKey].push(lesson);
+        });
+        
+        // Render mobile lessons
+        const container = document.getElementById('mobileLessonsContainer');
+        container.innerHTML = '';
+        
+        if (dayLessons.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>No lessons on this day</p></div>';
+            return;
+        }
+        
+        // Get current time for highlighting
+        const now = new Date();
+        const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
+        
+        Object.keys(lessonsByTime).sort().forEach(timeKey => {
+            const lessons = lessonsByTime[timeKey];
+            
+            // Check if this time is current
+            const [hours, minutes] = timeKey.split(':').map(Number);
+            const timeMinutes = hours * 60 + minutes;
+            const isCurrentTime = dayDate.toDateString() === now.toDateString() &&
+                                 timeMinutes <= currentTimeMinutes &&
+                                 timeMinutes + 30 > currentTimeMinutes;
+            
+            const timeHeader = document.createElement('div');
+            timeHeader.className = `mobile-time-header ${isCurrentTime ? 'current-time' : ''}`;
+            timeHeader.textContent = timeKey;
+            container.appendChild(timeHeader);
+            
+            lessons.forEach(lesson => {
+                const card = document.createElement('div');
+                card.className = 'mobile-lesson-card';
+                
+                const duration = (lesson.dtend - lesson.dtstart) / 60000;
+                const existingPlan = this.allLessonPlans[lesson.uid];
+                
+                card.innerHTML = `
+                    <div class="mobile-lesson-title">${uiService.escapeHtml(lesson.summary)}</div>
+                    <div class="mobile-lesson-meta">
+                        ${lesson.dtstart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} (${duration}m) | ${uiService.escapeHtml(lesson.location || 'N/A')}
+                        ${lesson.description ? `<br>${uiService.escapeHtml(lesson.description)}` : ''}
+                    </div>
+                    ${existingPlan ? '<div class="mobile-lesson-status">✓ Lesson plan created</div>' : ''}
+                `;
+                
+                card.addEventListener('click', () => {
+                    UIService.app?.openLessonDetail(lesson, existingPlan);
+                });
+                
+                container.appendChild(card);
+            });
+        });
+        
+        // Update button states
+        document.getElementById('mobilePrevDayBtn').disabled = this.mobileDayOffset === 0;
+        document.getElementById('mobileNextDayBtn').disabled = this.mobileDayOffset === 4;
+    }
+
+    startCurrentTimeUpdater() {
+        // Update current time highlighting every minute
+        if (this.currentTimeUpdateInterval) {
+            clearInterval(this.currentTimeUpdateInterval);
+        }
+        
+        this.currentTimeUpdateInterval = setInterval(() => {
+            if (document.getElementById('mobileViewContainer').style.display !== 'none') {
+                this.renderMobileView();
+            }
+        }, 60000); // Update every minute
     }
 }
 

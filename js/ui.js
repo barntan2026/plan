@@ -123,7 +123,7 @@ class UIService {
             // Show read-only fields for ICS lessons
             readOnlySection.style.display = 'block';
             editableSection.style.display = 'none';
-            deleteBtn.style.display = 'none';
+            deleteBtn.style.display = 'block';
             saveLessonBtn.textContent = 'Save Lesson Plan';
             saveLessonBtn.dataset.mode = 'plan';
             
@@ -379,27 +379,38 @@ class UIService {
             const timelineWrapper = document.createElement('div');
             timelineWrapper.className = 'timeline-wrapper';
             
-            timeSlots.forEach((time) => {
+            // Create empty grid rows for time slots (6 AM to 8 PM = 28 slots)
+            const startHour = 6;
+            const endHour = 20;
+            const totalSlots = (endHour - startHour) * 2; // 30-min intervals
+            
+            // Render timeline slots as empty containers for grid structure
+            for (let i = 0; i < totalSlots; i++) {
                 const timeSlotDiv = document.createElement('div');
                 timeSlotDiv.className = 'timeline-slot';
-                
-                // Find lessons that overlap this time slot
-                const slotStartMinutes = this.timeStringToMinutes(time);
-                const slotEndMinutes = slotStartMinutes + 30;
-                
-                dayLessons.forEach(lesson => {
-                    const lessonStartTime = lesson.dtstart.getHours() * 60 + lesson.dtstart.getMinutes();
-                    const lessonEndTime = lesson.dtend.getHours() * 60 + lesson.dtend.getMinutes();
-                    
-                    // Check if lesson overlaps this slot
-                    if (lessonStartTime < slotEndMinutes && lessonEndTime > slotStartMinutes) {
-                        const card = this.createLessonCard(lesson, existingPlans[lesson.uid]);
-                        card.classList.add('lesson-in-slot');
-                        timeSlotDiv.appendChild(card);
-                    }
-                });
-                
                 timelineWrapper.appendChild(timeSlotDiv);
+            }
+            
+            // Render each lesson once with grid row spanning
+            dayLessons.forEach(lesson => {
+                const lessonStartTime = lesson.dtstart.getHours() * 60 + lesson.dtstart.getMinutes();
+                const lessonEndTime = lesson.dtend.getHours() * 60 + lesson.dtend.getMinutes();
+                
+                // Calculate which row the lesson starts at (row 1 is 6:00 AM)
+                const minutesFromStart = lessonStartTime - (startHour * 60);
+                const startRow = (minutesFromStart / 30) + 1;
+                
+                // Calculate duration in 30-minute slots
+                const durationMinutes = lessonEndTime - lessonStartTime;
+                const rowSpan = Math.max(1, Math.ceil(durationMinutes / 30));
+                const endRow = startRow + rowSpan;
+                
+                const card = this.createLessonCard(lesson, existingPlans[lesson.uid]);
+                card.classList.add('lesson-in-slot');
+                card.style.gridRowStart = startRow;
+                card.style.gridRowEnd = endRow;
+                
+                timelineWrapper.appendChild(card);
             });
             
             dayColumn.appendChild(timelineWrapper);
@@ -485,22 +496,17 @@ class UIService {
         card.innerHTML = `
             <div class="lesson-card-header">
                 <span class="lesson-title">${this.escapeHtml(lesson.summary)}</span>
-                ${badgeHTML}
             </div>
             <div class="lesson-meta">
                 <div class="lesson-meta-item">
-                    <strong>🕐</strong>
-                    <span>${lesson.dtstart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} (${duration}m)</span>
-                </div>
-                <div class="lesson-meta-item">
-                    <strong>📍</strong>
-                    <span>${this.escapeHtml(lesson.location || 'N/A')}</span>
-                </div>
-                <div class="lesson-meta-item">
-                    <strong>👥</strong>
-                    <span>${this.escapeHtml(lesson.description || 'N/A')}</span>
+                    <span>${lesson.dtstart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} (${duration}m) | ${this.escapeHtml(lesson.location || 'N/A')}</span>
                 </div>
             </div>
+            ${existingPlan && existingPlan.content ? `
+                <div class="lesson-notes">
+                    <div class="lesson-notes-content">${this.escapeHtml(existingPlan.content)}</div>
+                </div>
+            ` : ''}
             ${isPlanned ? '<div class="lesson-status planned">✓ Lesson plan created</div>' : '<div class="lesson-status">Click to create plan</div>'}
         `;
         

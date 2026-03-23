@@ -14,7 +14,7 @@
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <h1>📚 Lesson Planning Tool</h1>
+                <h1>Lesson Planning Tool</h1>
                 <div class="header-controls">
                     <button class="btn btn-primary" id="uploadBtn">Upload ICS File</button>
                     <button class="btn btn-primary" id="addLessonBtn" style="display: none;">+ Add Lesson</button>
@@ -64,6 +64,21 @@
             <!-- Lessons Grid -->
             <div class="lessons-container" id="lessonsContainer">
                 <div class="loading">Loading lessons...</div>
+            </div>
+
+            <!-- Mobile View -->
+            <div id="mobileViewContainer" style="display: none;">
+                <!-- Mobile Day Navigation -->
+                <div class="mobile-day-nav">
+                    <button id="mobilePrevDayBtn" class="mobile-nav-btn">← Prev</button>
+                    <span id="mobileDayDisplay" class="mobile-day-display">Monday, Mar 24</span>
+                    <button id="mobileNextDayBtn" class="mobile-nav-btn">Next →</button>
+                </div>
+
+                <!-- Mobile Timetable -->
+                <div id="mobileLessonsContainer" class="mobile-lessons">
+                    <div class="loading">Loading lessons...</div>
+                </div>
             </div>
         </main>
     </div>
