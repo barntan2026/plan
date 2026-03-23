@@ -316,65 +316,116 @@ class UIService {
             return;
         }
         
-        // Group lessons by day
-        const lessonsByDay = this.groupLessonsByDay(lessons);
+        // Group lessons by day for Mon-Fri only
+        const lessonsByDay = this.groupLessonsByDayTimetable(lessons);
         
         container.innerHTML = '';
+        container.className = 'timetable-container';
         
-        // Render each day with its lessons
-        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        // Create timetable
+        const timetable = document.createElement('div');
+        timetable.className = 'timetable';
         
-        for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
-            const dayLessons = lessonsByDay[dayIndex] || [];
-            const dayName = dayNames[dayIndex];
-            
-            // Create day section
-            const daySection = document.createElement('div');
-            daySection.className = 'day-section';
+        // Create time column (left side with time markers)
+        const timeColumn = document.createElement('div');
+        timeColumn.className = 'time-column';
+        
+        // Add time slots (6 AM to 8 PM in 30-minute intervals)
+        const timeSlots = this.generateTimeSlots(6, 20, 30); // 6 AM to 8 PM, 30-min intervals
+        
+        const timeBar = document.createElement('div');
+        timeBar.className = 'time-bar';
+        
+        timeSlots.forEach((time, index) => {
+            const timeSlot = document.createElement('div');
+            timeSlot.className = 'time-slot';
+            timeSlot.textContent = time;
+            timeBar.appendChild(timeSlot);
+        });
+        
+        timeColumn.appendChild(timeBar);
+        timetable.appendChild(timeColumn);
+        
+        // Create day columns (Monday-Friday only)
+        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        
+        for (let dayIndex = 0; dayIndex < 5; dayIndex++) {
+            const dayColumn = document.createElement('div');
+            dayColumn.className = 'day-column';
             
             // Calculate date for this day
             const dayDate = new Date(appInstance.currentWeekStart);
             dayDate.setDate(dayDate.getDate() + dayIndex);
             const dateStr = dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             
-            // Hide if day is in the past (but still show today and future)
-            if (dayDate < this.getTodayAtMidnight() && dayIndex > 0) {
-                daySection.style.opacity = '0.5';
-                daySection.style.pointerEvents = 'none';
+            // Hide if day is in the past
+            if (dayDate < this.getTodayAtMidnight()) {
+                dayColumn.style.opacity = '0.5';
+                dayColumn.style.pointerEvents = 'none';
             }
             
             // Add day header
             const dayHeader = document.createElement('div');
-            dayHeader.className = 'day-header';
-            dayHeader.innerHTML = `<h3>${dayName}, ${dateStr}</h3>`;
-            daySection.appendChild(dayHeader);
+            dayHeader.className = 'day-column-header';
+            dayHeader.innerHTML = `<div>${dayNames[dayIndex]}</div><div class="day-date">${dateStr}</div>`;
+            dayColumn.appendChild(dayHeader);
             
-            // Add lessons for this day
-            if (dayLessons.length === 0) {
-                const emptyDay = document.createElement('div');
-                emptyDay.className = 'empty-day';
-                emptyDay.textContent = 'No lessons';
-                daySection.appendChild(emptyDay);
-            } else {
-                const lessonsWrapper = document.createElement('div');
-                lessonsWrapper.className = 'day-lessons';
+            // Create time slots with lessons
+            const dayLessons = lessonsByDay[dayIndex] || [];
+            const timelineWrapper = document.createElement('div');
+            timelineWrapper.className = 'timeline-wrapper';
+            
+            timeSlots.forEach((time, slotIndex) => {
+                const timeSlotDiv = document.createElement('div');
+                timeSlotDiv.className = 'timeline-slot';
+                
+                // Find lessons that overlap this time slot
+                const slotStartMinutes = this.timeStringToMinutes(time);
+                const slotEndMinutes = slotStartMinutes + 30;
                 
                 dayLessons.forEach(lesson => {
-                    const card = this.createLessonCard(lesson, existingPlans[lesson.uid]);
-                    lessonsWrapper.appendChild(card);
+                    const lessonStartTime = lesson.dtstart.getHours() * 60 + lesson.dtstart.getMinutes();
+                    const lessonEndTime = lesson.dtend.getHours() * 60 + lesson.dtend.getMinutes();
+                    
+                    // Check if lesson overlaps this slot
+                    if (lessonStartTime < slotEndMinutes && lessonEndTime > slotStartMinutes) {
+                        const card = this.createLessonCard(lesson, existingPlans[lesson.uid]);
+                        card.classList.add('lesson-in-slot');
+                        timeSlotDiv.appendChild(card);
+                    }
                 });
                 
-                daySection.appendChild(lessonsWrapper);
-            }
+                timelineWrapper.appendChild(timeSlotDiv);
+            });
             
-            container.appendChild(daySection);
+            dayColumn.appendChild(timelineWrapper);
+            timetable.appendChild(dayColumn);
         }
+        
+        container.appendChild(timetable);
     }
 
-    groupLessonsByDay(lessons) {
+    generateTimeSlots(startHour, endHour, intervalMinutes) {
+        const slots = [];
+        for (let hour = startHour; hour < endHour; hour++) {
+            for (let min = 0; min < 60; min += intervalMinutes) {
+                const hourStr = String(hour).padStart(2, '0');
+                const minStr = String(min).padStart(2, '0');
+                slots.push(`${hourStr}:${minStr}`);
+            }
+        }
+        return slots;
+    }
+
+    timeStringToMinutes(timeStr) {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+    }
+
+    groupLessonsByDayTimetable(lessons) {
         const lessonsByDay = Object.create(null);
         
-        for (let i = 0; i < 7; i++) {
+        for (let i = 0; i < 5; i++) { // Only Monday-Friday
             lessonsByDay[i] = [];
         }
         
@@ -387,13 +438,13 @@ class UIService {
             
             const daysDiff = Math.floor((lessonDate - weekStart) / (1000 * 60 * 60 * 24));
             
-            if (daysDiff >= 0 && daysDiff < 7) {
+            if (daysDiff >= 0 && daysDiff < 5) { // Only Mon-Fri
                 lessonsByDay[daysDiff].push(lesson);
             }
         });
         
         // Sort lessons within each day by start time
-        for (let i = 0; i < 7; i++) {
+        for (let i = 0; i < 5; i++) {
             lessonsByDay[i].sort((a, b) => a.dtstart - b.dtstart);
         }
         
