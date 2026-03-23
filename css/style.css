@@ -197,10 +197,41 @@ body {
 
 /* Lessons Grid */
 .lessons-container {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    margin-bottom: 40px;
+}
+
+.day-section {
+    transition: opacity 0.3s ease;
+}
+
+.day-header {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--primary-color);
+}
+
+.day-header h3 {
+    color: var(--primary-color);
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.day-lessons {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 20px;
-    margin-bottom: 40px;
+}
+
+.empty-day {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    background: var(--background-color);
+    border-radius: 8px;
+    grid-column: 1 / -1;
 }
 
 .lesson-card {
@@ -525,7 +556,7 @@ body {
         justify-content: space-between;
     }
 
-    .lessons-container {
+    .day-lessons {
         grid-template-columns: 1fr;
     }
 

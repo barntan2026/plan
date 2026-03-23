@@ -201,9 +201,26 @@ class LessonPlannerApp {
         monday.setHours(0, 0, 0, 0);
         return monday;
     }
+
+    isWeekInPast(weekStartDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const weekEndDate = new Date(weekStartDate);
+        weekEndDate.setDate(weekEndDate.getDate() + 7); // End of week (next Monday)
+        return weekEndDate <= today; // Week is past if it ends on or before today
+    }
     
     previousWeek() {
-        this.currentWeekStart.setDate(this.currentWeekStart.getDate() - 7);
+        const newWeekStart = new Date(this.currentWeekStart);
+        newWeekStart.setDate(newWeekStart.getDate() - 7);
+        
+        // Prevent navigating to past weeks
+        if (this.isWeekInPast(newWeekStart)) {
+            UIService.showToast('Cannot view past weeks', 'warning');
+            return;
+        }
+        
+        this.currentWeekStart = newWeekStart;
         this.showLessonsForWeek();
     }
     

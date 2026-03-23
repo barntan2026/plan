@@ -316,12 +316,94 @@ class UIService {
             return;
         }
         
+        // Group lessons by day
+        const lessonsByDay = this.groupLessonsByDay(lessons);
+        
         container.innerHTML = '';
         
+        // Render each day with its lessons
+        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        
+        for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+            const dayLessons = lessonsByDay[dayIndex] || [];
+            const dayName = dayNames[dayIndex];
+            
+            // Create day section
+            const daySection = document.createElement('div');
+            daySection.className = 'day-section';
+            
+            // Calculate date for this day
+            const dayDate = new Date(appInstance.currentWeekStart);
+            dayDate.setDate(dayDate.getDate() + dayIndex);
+            const dateStr = dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            
+            // Hide if day is in the past (but still show today and future)
+            if (dayDate < this.getTodayAtMidnight() && dayIndex > 0) {
+                daySection.style.opacity = '0.5';
+                daySection.style.pointerEvents = 'none';
+            }
+            
+            // Add day header
+            const dayHeader = document.createElement('div');
+            dayHeader.className = 'day-header';
+            dayHeader.innerHTML = `<h3>${dayName}, ${dateStr}</h3>`;
+            daySection.appendChild(dayHeader);
+            
+            // Add lessons for this day
+            if (dayLessons.length === 0) {
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'empty-day';
+                emptyDay.textContent = 'No lessons';
+                daySection.appendChild(emptyDay);
+            } else {
+                const lessonsWrapper = document.createElement('div');
+                lessonsWrapper.className = 'day-lessons';
+                
+                dayLessons.forEach(lesson => {
+                    const card = this.createLessonCard(lesson, existingPlans[lesson.uid]);
+                    lessonsWrapper.appendChild(card);
+                });
+                
+                daySection.appendChild(lessonsWrapper);
+            }
+            
+            container.appendChild(daySection);
+        }
+    }
+
+    groupLessonsByDay(lessons) {
+        const lessonsByDay = Object.create(null);
+        
+        for (let i = 0; i < 7; i++) {
+            lessonsByDay[i] = [];
+        }
+        
         lessons.forEach(lesson => {
-            const card = this.createLessonCard(lesson, existingPlans[lesson.uid]);
-            container.appendChild(card);
+            const lessonDate = new Date(lesson.dtstart);
+            lessonDate.setHours(0, 0, 0, 0);
+            
+            const weekStart = new Date(appInstance.currentWeekStart);
+            weekStart.setHours(0, 0, 0, 0);
+            
+            const daysDiff = Math.floor((lessonDate - weekStart) / (1000 * 60 * 60 * 24));
+            
+            if (daysDiff >= 0 && daysDiff < 7) {
+                lessonsByDay[daysDiff].push(lesson);
+            }
         });
+        
+        // Sort lessons within each day by start time
+        for (let i = 0; i < 7; i++) {
+            lessonsByDay[i].sort((a, b) => a.dtstart - b.dtstart);
+        }
+        
+        return lessonsByDay;
+    }
+
+    getTodayAtMidnight() {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return today;
     }
     
     createLessonCard(lesson, existingPlan) {
