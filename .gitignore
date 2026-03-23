@@ -1,7 +1,7 @@
-# Firebase Config - DO NOT COMMIT
-js/firebase-config.js
-
-# Dependencies
+# Environment variables (but firebase-config.js is needed for app to work)
+.env
+.env.local
+.env.*.local
 node_modules/
 package-lock.json
 yarn.lock
