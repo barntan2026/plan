@@ -308,7 +308,7 @@ class UIService {
         
         if (lessons.length === 0) {
             container.innerHTML = `
-                <div class="empty-state" style="grid-column: 1/-1;">
+                <div class="empty-state">
                     <h3>No lessons this week</h3>
                     <p>Upload an ICS file to get started or navigate to another week.</p>
                 </div>
@@ -320,23 +320,27 @@ class UIService {
         const lessonsByDay = this.groupLessonsByDayTimetable(lessons);
         
         container.innerHTML = '';
-        container.className = 'timetable-container';
         
-        // Create timetable
-        const timetable = document.createElement('div');
-        timetable.className = 'timetable';
+        // Create timetable wrapper with Bootstrap
+        const timetableWrapper = document.createElement('div');
+        timetableWrapper.className = 'timetable-wrapper';
         
-        // Create time column (left side with time markers)
+        // Create time column
         const timeColumn = document.createElement('div');
-        timeColumn.className = 'time-column';
+        timeColumn.className = 'time-column col-sm-1';
         
-        // Add time slots (6 AM to 8 PM in 30-minute intervals)
-        const timeSlots = this.generateTimeSlots(6, 20, 30); // 6 AM to 8 PM, 30-min intervals
+        // Add time slots
+        const timeSlots = this.generateTimeSlots(6, 20, 30);
         
         const timeBar = document.createElement('div');
         timeBar.className = 'time-bar';
         
-        timeSlots.forEach((time, index) => {
+        const timeHeader = document.createElement('div');
+        timeHeader.className = 'time-header';
+        timeHeader.textContent = 'Time';
+        timeBar.appendChild(timeHeader);
+        
+        timeSlots.forEach((time) => {
             const timeSlot = document.createElement('div');
             timeSlot.className = 'time-slot';
             timeSlot.textContent = time;
@@ -344,14 +348,14 @@ class UIService {
         });
         
         timeColumn.appendChild(timeBar);
-        timetable.appendChild(timeColumn);
+        timetableWrapper.appendChild(timeColumn);
         
-        // Create day columns (Monday-Friday only)
+        // Create day columns (Monday-Friday)
         const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
         
         for (let dayIndex = 0; dayIndex < 5; dayIndex++) {
             const dayColumn = document.createElement('div');
-            dayColumn.className = 'day-column';
+            dayColumn.className = 'day-column col-sm-2';
             
             // Calculate date for this day
             const dayDate = new Date(appInstance.currentWeekStart);
@@ -367,7 +371,7 @@ class UIService {
             // Add day header
             const dayHeader = document.createElement('div');
             dayHeader.className = 'day-column-header';
-            dayHeader.innerHTML = `<div>${dayNames[dayIndex]}</div><div class="day-date">${dateStr}</div>`;
+            dayHeader.innerHTML = `<div class="day-name">${dayNames[dayIndex]}</div><div class="day-date">${dateStr}</div>`;
             dayColumn.appendChild(dayHeader);
             
             // Create time slots with lessons
@@ -375,7 +379,7 @@ class UIService {
             const timelineWrapper = document.createElement('div');
             timelineWrapper.className = 'timeline-wrapper';
             
-            timeSlots.forEach((time, slotIndex) => {
+            timeSlots.forEach((time) => {
                 const timeSlotDiv = document.createElement('div');
                 timeSlotDiv.className = 'timeline-slot';
                 
@@ -399,10 +403,10 @@ class UIService {
             });
             
             dayColumn.appendChild(timelineWrapper);
-            timetable.appendChild(dayColumn);
+            timetableWrapper.appendChild(dayColumn);
         }
         
-        container.appendChild(timetable);
+        container.appendChild(timetableWrapper);
     }
 
     generateTimeSlots(startHour, endHour, intervalMinutes) {
