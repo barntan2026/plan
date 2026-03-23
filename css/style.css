@@ -329,6 +329,14 @@ body {
     line-height: 1.3;
 }
 
+.lesson-plan-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    word-break: break-word;
+}
+
 .lesson-notes {
     margin-top: 4px;
     max-height: 80px;
@@ -884,6 +892,14 @@ body {
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 6px;
+}
+
+.mobile-plan-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    word-break: break-word;
 }
 
 .mobile-lesson-meta {

@@ -497,6 +497,7 @@ class UIService {
             <div class="lesson-card-header">
                 <span class="lesson-title">${this.escapeHtml(lesson.summary)}</span>
             </div>
+            ${existingPlan && existingPlan.title ? `<div class="lesson-plan-title">${this.escapeHtml(existingPlan.title)}</div>` : ''}
             <div class="lesson-meta">
                 <div class="lesson-meta-item">
                     <span>${lesson.dtstart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} (${duration}m) | ${this.escapeHtml(lesson.location || 'N/A')}</span>

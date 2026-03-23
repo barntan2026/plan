@@ -45,7 +45,8 @@ class LessonPlannerApp {
             // Hide auth section, show main section
             document.getElementById('authSection').style.display = 'none';
             document.getElementById('mainSection').style.display = 'block';
-            document.getElementById('userEmail').textContent = user.email;
+            document.getElementById('userEmail').textContent = '';
+            document.getElementById('userEmail').style.display = 'none';
             document.getElementById('logoutBtn').style.display = 'block';
             document.getElementById('addLessonBtn').style.display = 'block';
             
@@ -74,6 +75,7 @@ class LessonPlannerApp {
         document.getElementById('authSection').style.display = 'flex';
         document.getElementById('mainSection').style.display = 'none';
         document.getElementById('userEmail').textContent = '';
+        document.getElementById('userEmail').style.display = 'none';
         document.getElementById('logoutBtn').style.display = 'none';
         
         // Unsubscribe from listeners
@@ -462,6 +464,7 @@ class LessonPlannerApp {
                 
                 card.innerHTML = `
                     <div class="mobile-lesson-title">${uiService.escapeHtml(lesson.summary)}</div>
+                    ${existingPlan && existingPlan.title ? `<div class="mobile-plan-title">${uiService.escapeHtml(existingPlan.title)}</div>` : ''}
                     <div class="mobile-lesson-meta">
                         ${lesson.dtstart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} (${duration}m) | ${uiService.escapeHtml(lesson.location || 'N/A')}
                         ${lesson.description ? `<br>${uiService.escapeHtml(lesson.description)}` : ''}
