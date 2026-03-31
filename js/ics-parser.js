@@ -113,16 +113,14 @@ class ICSParser {
             const hour = parseInt(timePart.substring(0, 2));
             const minute = parseInt(timePart.substring(2, 4));
             const second = parseInt(timePart.substring(4, 6)) || 0;
-            
-            // Handle timezone
-            if (params.TZID && params.TZID === 'Asia/Singapore') {
-                // Create date in local context and adjust for timezone
+
+            // UTC timestamp with trailing Z
+            if (cleanStr.endsWith('Z')) {
+                date = new Date(Date.UTC(year, month, day, hour, minute, second));
+            } else if (params.TZID === 'Asia/Singapore') {
+                // Treat Singapore timetable timestamps as wall-clock local values.
+                // This avoids shifting lessons into the wrong day/week.
                 date = new Date(year, month, day, hour, minute, second);
-                // Singapore is UTC+8
-                const offset = date.getTimezoneOffset();
-                const sgOffset = -480; // Singapore UTC offset in minutes
-                const adjustedDate = new Date(date.getTime() + (offset - sgOffset) * 60000);
-                return adjustedDate;
             } else {
                 date = new Date(year, month, day, hour, minute, second);
             }
@@ -159,13 +157,11 @@ class ICSParser {
             const interval = parseInt(rruleParams.INTERVAL) || 1;
             const untilStr = rruleParams.UNTIL;
             const byDay = rruleParams.BYDAY ? rruleParams.BYDAY.split(',') : null;
+            const count = parseInt(rruleParams.COUNT, 10) || null;
             
             let untilDate;
             if (untilStr) {
-                const year = parseInt(untilStr.substring(0, 4));
-                const month = parseInt(untilStr.substring(4, 6)) - 1;
-                const day = parseInt(untilStr.substring(6, 8));
-                untilDate = new Date(year, month, day);
+                untilDate = ICSParser.parseRecurrenceUntil(untilStr);
             } else if (until) {
                 untilDate = until;
             } else {
@@ -175,61 +171,62 @@ class ICSParser {
             
             // Add original event
             expandedEvents.push(event);
+            let occurrenceCount = 1;
+            const duration = event.dtend - event.dtstart;
             
-            // Generate recurrences
-            let currentDate = new Date(event.dtstart);
             const dayMap = {
                 'MO': 1, 'TU': 2, 'WE': 3, 'TH': 4,
                 'FR': 5, 'SA': 6, 'SU': 0
             };
-            
+
+            if (freq === 'WEEKLY' && byDay) {
+                for (const bd of byDay) {
+                    const targetDay = dayMap[bd];
+                    if (targetDay === undefined) continue;
+
+                    const occurrenceDate = new Date(event.dtstart);
+                    const offsetDays = (targetDay - occurrenceDate.getDay() + 7) % 7;
+                    occurrenceDate.setDate(occurrenceDate.getDate() + offsetDays);
+
+                    if (occurrenceDate <= event.dtstart) {
+                        occurrenceDate.setDate(occurrenceDate.getDate() + 7 * interval);
+                    }
+
+                    while (occurrenceDate <= untilDate) {
+                        if (count && occurrenceCount >= count) break;
+
+                        const newEvent = { ...event };
+                        newEvent.dtstart = new Date(occurrenceDate);
+                        newEvent.dtend = new Date(newEvent.dtstart.getTime() + duration);
+                        expandedEvents.push(newEvent);
+                        occurrenceCount++;
+                        occurrenceDate.setDate(occurrenceDate.getDate() + 7 * interval);
+                    }
+                }
+                continue;
+            }
+
+            let currentDate = new Date(event.dtstart);
             while (true) {
-                let nextDate = new Date(currentDate);
-                
+                const nextDate = new Date(currentDate);
+
                 if (freq === 'WEEKLY') {
                     nextDate.setDate(nextDate.getDate() + (7 * interval));
-                    
-                    // If byDay is specified, find the right day
-                    if (byDay) {
-                        const dayDiff = currentDate.getDay();
-                        for (const bd of byDay) {
-                            const targetDay = dayMap[bd];
-                            if (targetDay !== undefined) {
-                                let adjustDate = new Date(currentDate);
-                                adjustDate.setDate(adjustDate.getDate() + (targetDay - dayDiff + 7) % 7 || 7);
-                                
-                                for (let week = 0; week < interval; week++) {
-                                    let occurrenceDate = new Date(adjustDate);
-                                    occurrenceDate.setDate(occurrenceDate.getDate() + week * 7);
-                                    
-                                    if (occurrenceDate > untilDate) break;
-                                    if (occurrenceDate > currentDate) {
-                                        const newEvent = { ...event };
-                                        const duration = event.dtend - event.dtstart;
-                                        newEvent.dtstart = new Date(occurrenceDate);
-                                        newEvent.dtend = new Date(newEvent.dtstart.getTime() + duration);
-                                        expandedEvents.push(newEvent);
-                                    }
-                                }
-                            }
-                        }
-                        break;
-                    }
                 } else if (freq === 'DAILY') {
                     nextDate.setDate(nextDate.getDate() + interval);
-                }
-                
-                if (nextDate > untilDate) break;
-                if (!byDay) {
-                    const duration = event.dtend - event.dtstart;
-                    const newEvent = { ...event };
-                    newEvent.dtstart = new Date(nextDate);
-                    newEvent.dtend = new Date(newEvent.dtstart.getTime() + duration);
-                    expandedEvents.push(newEvent);
-                    currentDate = nextDate;
                 } else {
                     break;
                 }
+
+                if (nextDate > untilDate) break;
+                if (count && occurrenceCount >= count) break;
+
+                const newEvent = { ...event };
+                newEvent.dtstart = new Date(nextDate);
+                newEvent.dtend = new Date(newEvent.dtstart.getTime() + duration);
+                expandedEvents.push(newEvent);
+                occurrenceCount++;
+                currentDate = nextDate;
             }
         }
         
@@ -237,6 +234,31 @@ class ICSParser {
         expandedEvents.sort((a, b) => a.dtstart - b.dtstart);
         
         return expandedEvents;
+    }
+
+    static parseRecurrenceUntil(untilStr) {
+        const cleanUntil = (untilStr || '').replace(/Z$/, '');
+
+        if (cleanUntil.includes('T')) {
+            const [datePart, timePart] = cleanUntil.split('T');
+            const year = parseInt(datePart.substring(0, 4), 10);
+            const month = parseInt(datePart.substring(4, 6), 10) - 1;
+            const day = parseInt(datePart.substring(6, 8), 10);
+            const hour = parseInt(timePart.substring(0, 2), 10);
+            const minute = parseInt(timePart.substring(2, 4), 10);
+            const second = parseInt(timePart.substring(4, 6) || '0', 10);
+
+            if (untilStr.endsWith('Z')) {
+                return new Date(Date.UTC(year, month, day, hour, minute, second));
+            }
+
+            return new Date(year, month, day, hour, minute, second);
+        }
+
+        const year = parseInt(cleanUntil.substring(0, 4), 10);
+        const month = parseInt(cleanUntil.substring(4, 6), 10) - 1;
+        const day = parseInt(cleanUntil.substring(6, 8), 10);
+        return new Date(year, month, day, 23, 59, 59, 999);
     }
     
     static getWeekLessons(events, weekStart) {

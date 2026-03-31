@@ -2,6 +2,8 @@
 class LessonPlannerApp {
     
     constructor() {
+        this.adminEmail = 'tan_seng_kwang@moe.edu.sg';
+        this.isAdmin = false;
         this.allEvents = [];
         this.expandedEvents = [];
         this.currentWeekStart = this.getMondayOfCurrentWeek();
@@ -10,8 +12,55 @@ class LessonPlannerApp {
         this.authUnsubscribe = null;
         this.plansUnsubscribe = null;
         this.manualLessonsUnsubscribe = null;
+        this.deletedLessonsUnsubscribe = null;
+        this.membersUnsubscribe = null;
+        this.deletedLessonIds = new Set();
         this.mobileDayOffset = 0; // 0 = Monday, 1 = Tuesday, etc.
         this.currentTimeUpdateInterval = null;
+        this.compressedMode = true;
+        this.currentSearchTerm = '';
+        // Set initial toggle button text to 'Full View' since compressed is default
+        window.addEventListener('DOMContentLoaded', () => {
+            const btn = document.getElementById('viewToggleBtn');
+            if (btn) btn.textContent = 'Full View';
+        });
+    }
+
+    getDeletedLessonsStorageKey() {
+        const user = FirebaseService.getCurrentUser();
+        return user ? `deletedLessons_${user.uid}` : 'deletedLessons_guest';
+    }
+
+    loadDeletedLessonsFromLocalStorage() {
+        try {
+            const raw = localStorage.getItem(this.getDeletedLessonsStorageKey());
+            if (!raw) return;
+            const ids = JSON.parse(raw);
+            if (Array.isArray(ids)) {
+                this.deletedLessonIds = new Set(ids);
+            }
+        } catch (error) {
+            console.warn('Failed to load deleted lessons from localStorage:', error);
+        }
+    }
+
+    saveDeletedLessonsToLocalStorage() {
+        try {
+            localStorage.setItem(
+                this.getDeletedLessonsStorageKey(),
+                JSON.stringify(Array.from(this.deletedLessonIds))
+            );
+        } catch (error) {
+            console.warn('Failed to save deleted lessons to localStorage:', error);
+        }
+    }
+
+    updateClearRangeToggleUI(isOpen) {
+        const clearRangeToggleBtn = document.getElementById('clearRangeToggleBtn');
+        if (!clearRangeToggleBtn) return;
+        clearRangeToggleBtn.innerHTML = isOpen
+            ? '<i class="bi bi-x-circle"></i> Hide Delete'
+            : '<i class="bi bi-trash"></i> Delete';
     }
     
     async init() {
@@ -42,13 +91,49 @@ class LessonPlannerApp {
     
     async onUserSignedIn(user) {
         try {
+            this.loadDeletedLessonsFromLocalStorage();
+
+            const normalizedEmail = FirebaseService.normalizeEmail(user.email);
+            this.isAdmin = normalizedEmail === this.adminEmail;
+
+            const hasAccess = await FirebaseService.canUserAccessApp(this.adminEmail, normalizedEmail);
+            if (!hasAccess) {
+                UIService.showToast('Access denied. Please contact the administrator.', 'error');
+                await FirebaseService.logout();
+                return;
+            }
+
             // Hide auth section, show main section
             document.getElementById('authSection').style.display = 'none';
             document.getElementById('mainSection').style.display = 'block';
-            document.getElementById('userEmail').textContent = '';
-            document.getElementById('userEmail').style.display = 'none';
+            document.getElementById('userEmail').textContent = normalizedEmail;
+            document.getElementById('userEmail').style.display = 'inline';
             document.getElementById('logoutBtn').style.display = 'block';
             document.getElementById('addLessonBtn').style.display = 'block';
+            const clearRangeToggleBtn = document.getElementById('clearRangeToggleBtn');
+            if (clearRangeToggleBtn) {
+                clearRangeToggleBtn.style.display = 'block';
+                this.updateClearRangeToggleUI(false);
+            }
+
+            // Show/hide admin panel and bootstrap admin profile.
+            const adminPanel = document.getElementById('adminPanel');
+            if (adminPanel) {
+                adminPanel.style.display = this.isAdmin ? 'block' : 'none';
+            }
+            const adminPageLink = document.getElementById('adminPageLink');
+            if (adminPageLink) {
+                adminPageLink.style.display = this.isAdmin ? 'inline-block' : 'none';
+            }
+            if (this.isAdmin) {
+                try {
+                    await FirebaseService.ensureAdminProfile();
+                } catch (adminProfileError) {
+                    console.warn('Admin profile setup warning:', adminProfileError);
+                    UIService.showToast('Admin profile setup needs updated Firestore rules', 'warning');
+                }
+                this.setupMembersListener();
+            }
             
             // Load calendar data if exists
             const calendarData = await FirebaseService.getCalendarData();
@@ -63,6 +148,9 @@ class LessonPlannerApp {
             
             // Watch for manual lesson updates
             this.setupManualLessonsListener();
+
+            // Watch for deleted ICS lesson occurrences
+            this.setupDeletedLessonsListener();
             
         } catch (error) {
             console.error('Sign in error:', error);
@@ -77,6 +165,19 @@ class LessonPlannerApp {
         document.getElementById('userEmail').textContent = '';
         document.getElementById('userEmail').style.display = 'none';
         document.getElementById('logoutBtn').style.display = 'none';
+        const clearRangeToggleBtn = document.getElementById('clearRangeToggleBtn');
+        if (clearRangeToggleBtn) {
+            clearRangeToggleBtn.style.display = 'none';
+            this.updateClearRangeToggleUI(false);
+        }
+        const rangeClearPanel = document.getElementById('rangeClearPanel');
+        if (rangeClearPanel) {
+            rangeClearPanel.setAttribute('hidden', 'hidden');
+        }
+        const adminPageLink = document.getElementById('adminPageLink');
+        if (adminPageLink) {
+            adminPageLink.style.display = 'none';
+        }
         
         // Unsubscribe from listeners
         if (this.plansUnsubscribe) {
@@ -85,11 +186,23 @@ class LessonPlannerApp {
         if (this.manualLessonsUnsubscribe) {
             this.manualLessonsUnsubscribe();
         }
+        if (this.deletedLessonsUnsubscribe) {
+            this.deletedLessonsUnsubscribe();
+        }
+        if (this.membersUnsubscribe) {
+            this.membersUnsubscribe();
+        }
         
         // Clear data
         this.allEvents = [];
         this.expandedEvents = [];
         this.allLessonPlans = {};
+        this.deletedLessonIds = new Set();
+        this.isAdmin = false;
+        const adminPanel = document.getElementById('adminPanel');
+        if (adminPanel) {
+            adminPanel.style.display = 'none';
+        }
     }
     
     setupPlansListener() {
@@ -106,12 +219,41 @@ class LessonPlannerApp {
         document.getElementById('logoutBtn').addEventListener('click', () => this.handleLogout());
         
         // File upload
-        document.getElementById('uploadBtn').addEventListener('click', () => {
-            document.getElementById('icsFileInput').click();
+        const uploadBtn = document.getElementById('uploadBtn');
+        const icsFileInput = document.getElementById('icsFileInput');
+        uploadBtn.addEventListener('click', () => {
+            const user = FirebaseService.getCurrentUser();
+            if (!user) {
+                UIService.showToast('Please sign in before uploading ICS files.', 'warning');
+                return;
+            }
+
+            // Reset value so selecting the same file again still triggers change.
+            icsFileInput.value = '';
+            try {
+                if (typeof icsFileInput.showPicker === 'function') {
+                    icsFileInput.showPicker();
+                } else {
+                    icsFileInput.click();
+                }
+            } catch (pickerError) {
+                // Fallback for browsers where showPicker exists but is restricted.
+                try {
+                    icsFileInput.click();
+                } catch (clickError) {
+                    console.error('ICS picker open error:', clickError);
+                    UIService.showToast('Could not open file picker. Please try again.', 'error');
+                }
+            }
         });
-        document.getElementById('icsFileInput').addEventListener('change', async (e) => {
+        icsFileInput.addEventListener('change', async (e) => {
             if (e.target.files.length > 0) {
-                await this.handleFileUpload(e.target.files[0]);
+                try {
+                    await this.handleFileUpload(e.target.files[0]);
+                } finally {
+                    // Ensure repeated uploads always trigger change events.
+                    e.target.value = '';
+                }
             }
         });
         
@@ -128,11 +270,133 @@ class LessonPlannerApp {
         });
         
         // Search
-        document.getElementById('filterInput').addEventListener('input', (e) => this.filterLessons(e.target.value));
+        document.getElementById('filterInput').addEventListener('input', (e) => {
+            this.currentSearchTerm = e.target.value;
+            this.filterLessons(this.currentSearchTerm);
+        });
+        
+        // View toggle
+        document.getElementById('viewToggleBtn').addEventListener('click', () => this.toggleViewMode());
         
         // Mobile navigation
         document.getElementById('mobilePrevDayBtn').addEventListener('click', () => this.mobilePreviousDay());
         document.getElementById('mobileNextDayBtn').addEventListener('click', () => this.mobileNextDay());
+
+        // Clear events by date range
+        const clearRangeToggleBtn = document.getElementById('clearRangeToggleBtn');
+        const rangeClearPanel = document.getElementById('rangeClearPanel');
+        if (clearRangeToggleBtn && rangeClearPanel) {
+            clearRangeToggleBtn.addEventListener('click', () => {
+                const isHidden = rangeClearPanel.hasAttribute('hidden');
+                if (isHidden) {
+                    rangeClearPanel.removeAttribute('hidden');
+                    this.updateClearRangeToggleUI(true);
+                } else {
+                    rangeClearPanel.setAttribute('hidden', 'hidden');
+                    this.updateClearRangeToggleUI(false);
+                }
+            });
+        }
+
+        const clearRangeBtn = document.getElementById('clearRangeBtn');
+        if (clearRangeBtn) {
+            clearRangeBtn.addEventListener('click', () => this.handleClearEventsRange());
+        }
+
+        // Admin member management
+        const addMemberBtn = document.getElementById('addMemberBtn');
+        const memberEmailInput = document.getElementById('memberEmailInput');
+        if (addMemberBtn && memberEmailInput) {
+            addMemberBtn.addEventListener('click', () => this.handleAddMember());
+            memberEmailInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.handleAddMember();
+                }
+            });
+        }
+    }
+
+    setupMembersListener() {
+        if (this.membersUnsubscribe) {
+            this.membersUnsubscribe();
+        }
+        this.membersUnsubscribe = FirebaseService.watchMembers((members) => {
+            this.renderMembersList(members);
+        });
+    }
+
+    async handleAddMember() {
+        if (!this.isAdmin) {
+            UIService.showToast('Only administrator can add members', 'error');
+            return;
+        }
+
+        const emailInput = document.getElementById('memberEmailInput');
+        const email = (emailInput.value || '').trim().toLowerCase();
+
+        if (!email) {
+            UIService.showToast('Please enter a member email', 'error');
+            return;
+        }
+
+        if (!/^\S+@\S+\.\S+$/.test(email)) {
+            UIService.showToast('Please enter a valid email', 'error');
+            return;
+        }
+
+        try {
+            await FirebaseService.addMemberByEmail(email);
+            UIService.showToast('Member added', 'success');
+            emailInput.value = '';
+        } catch (error) {
+            console.error('Add member error:', error);
+            UIService.showToast(error.message, 'error');
+        }
+    }
+
+    async handleRemoveMember(memberId, memberEmail) {
+        if (!this.isAdmin) return;
+        if (!confirm('Remove this member?')) return;
+
+        try {
+            await FirebaseService.removeMember(memberId, memberEmail);
+            UIService.showToast('Member removed', 'success');
+        } catch (error) {
+            console.error('Remove member error:', error);
+            UIService.showToast(error.message, 'error');
+        }
+    }
+
+    renderMembersList(members) {
+        const container = document.getElementById('membersList');
+        if (!container) return;
+
+        if (!members || members.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>No members added yet.</p></div>';
+            return;
+        }
+
+        container.innerHTML = '';
+        members.forEach(member => {
+            const item = document.createElement('div');
+            item.className = 'member-item';
+
+            const left = document.createElement('div');
+            left.innerHTML = `
+                <div class="member-email">${uiService.escapeHtml(member.email || '')}</div>
+                <div class="member-meta">Added by ${uiService.escapeHtml(member.addedBy || 'admin')}</div>
+            `;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'btn btn-danger btn-sm';
+            removeBtn.textContent = 'Remove';
+            removeBtn.addEventListener('click', () => this.handleRemoveMember(member.id, member.email || ''));
+
+            item.appendChild(left);
+            item.appendChild(removeBtn);
+            container.appendChild(item);
+        });
     }
     
     
@@ -157,7 +421,7 @@ class LessonPlannerApp {
     
     async handleFileUpload(file) {
         try {
-            if (!file.name.endsWith('.ics')) {
+            if (!file.name.toLowerCase().endsWith('.ics')) {
                 UIService.showToast('Please upload an ICS file', 'error');
                 return;
             }
@@ -172,15 +436,20 @@ class LessonPlannerApp {
                 return;
             }
             
-            // Expand recurring events
-            this.allEvents = ICSParser.expandRecurrence(events);
-            this.expandedEvents = [...this.allEvents];
+            // Expand recurring events locally for display
+            this.expandedEvents = ICSParser.expandRecurrence(events);
+            this.allEvents = [...this.expandedEvents];
             
             // Save to Firebase
             const user = FirebaseService.getCurrentUser();
             if (user) {
-                await FirebaseService.saveCalendarData(file.name, this.expandedEvents);
-                UIService.showToast(`Loaded ${this.expandedEvents.length} events`, 'success');
+                try {
+                    // Save compact source events (with RRULE) to avoid Firestore doc-size overflow.
+                    await FirebaseService.saveCalendarData(file.name, events);
+                } catch (saveError) {
+                    console.error('Calendar save warning:', saveError);
+                    UIService.showToast('Calendar loaded locally, but cloud save failed. You can still use the planner.', 'warning');
+                }
             }
             
             // Show current week
@@ -193,6 +462,60 @@ class LessonPlannerApp {
         } catch (error) {
             console.error('File upload error:', error);
             UIService.showToast('Error uploading ICS file: ' + error.message, 'error');
+        }
+    }
+
+    async handleClearEventsRange() {
+        const startInput = document.getElementById('clearStartDate');
+        const endInput = document.getElementById('clearEndDate');
+        if (!startInput || !endInput) return;
+
+        if (!startInput.value || !endInput.value) {
+            UIService.showToast('Please select both start and end dates.', 'error');
+            return;
+        }
+
+        const startDate = new Date(`${startInput.value}T00:00:00`);
+        const endDate = new Date(`${endInput.value}T23:59:59`);
+        if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || startDate > endDate) {
+            UIService.showToast('Please choose a valid date range.', 'error');
+            return;
+        }
+
+        const inRange = (lesson) => lesson.dtstart >= startDate && lesson.dtstart <= endDate;
+        const manualLessons = this.expandedEvents.filter((l) => l.isManual && inRange(l));
+        const icsLessons = this.expandedEvents.filter((l) => !l.isManual && inRange(l) && !this.isLessonDeleted(l));
+
+        if (manualLessons.length === 0 && icsLessons.length === 0) {
+            UIService.showToast('No events found in that date range.', 'info');
+            return;
+        }
+
+        const confirmMsg = `Clear ${manualLessons.length + icsLessons.length} events from ${startInput.value} to ${endInput.value}?`;
+        if (!confirm(confirmMsg)) return;
+
+        const manualIds = manualLessons.map((l) => l.uid);
+        const icsOccurrenceIds = icsLessons.map((l) => this.getLessonPlanId(l));
+
+        // Optimistic update for faster UX
+        icsOccurrenceIds.forEach((id) => this.deletedLessonIds.add(id));
+        this.saveDeletedLessonsToLocalStorage();
+        this.expandedEvents = this.expandedEvents.filter((l) => {
+            if (l.isManual) {
+                return !manualIds.includes(l.uid);
+            }
+            return !inRange(l);
+        });
+        this.showLessonsForWeek();
+
+        try {
+            await FirebaseService.deleteLessonsByIds(manualIds);
+            await FirebaseService.markLessonOccurrencesDeletedByIds(icsOccurrenceIds);
+            await FirebaseService.deleteLessonPlansByIds([...manualIds, ...icsOccurrenceIds]);
+            UIService.showToast('Events cleared successfully.', 'success');
+        } catch (error) {
+            console.error('Clear range error:', error);
+            UIService.showToast('Events cleared locally, but cloud sync failed.', 'warning');
         }
     }
     
@@ -214,25 +537,40 @@ class LessonPlannerApp {
         return monday;
     }
 
-    isWeekInPast(weekStartDate) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const weekEndDate = new Date(weekStartDate);
-        weekEndDate.setDate(weekEndDate.getDate() + 7); // End of week (next Monday)
-        return weekEndDate <= today; // Week is past if it ends on or before today
-    }
-    
-    previousWeek() {
-        const newWeekStart = new Date(this.currentWeekStart);
-        newWeekStart.setDate(newWeekStart.getDate() - 7);
-        
-        // Prevent navigating to past weeks
-        if (this.isWeekInPast(newWeekStart)) {
-            UIService.showToast('Cannot view past weeks', 'warning');
-            return;
+    getLessonPlanId(lesson) {
+        // Manual lessons already have unique IDs per lesson, so use them directly.
+        if (lesson.isManual) {
+            return this.sanitizeFirestoreId(lesson.uid);
         }
-        
-        this.currentWeekStart = newWeekStart;
+
+        // Use local date (not UTC) so Singapore-timezone dates are correct.
+        const year = lesson.dtstart.getFullYear();
+        const month = String(lesson.dtstart.getMonth() + 1).padStart(2, '0');
+        const day   = String(lesson.dtstart.getDate()).padStart(2, '0');
+        const datePart = `${year}-${month}-${day}`;
+        const timePart = `${String(lesson.dtstart.getHours()).padStart(2, '0')}${String(lesson.dtstart.getMinutes()).padStart(2, '0')}`;
+        // Sanitize uid — ICS UIDs can contain '/' which is illegal in Firestore doc IDs.
+        const safeUid = this.sanitizeFirestoreId(lesson.uid);
+        return `${safeUid}_${datePart}_${timePart}`;
+    }
+
+    sanitizeFirestoreId(id) {
+        // Firestore doc IDs cannot contain '/' and must not be empty.
+        return (id || 'unknown').replace(/\//g, '_').replace(/\.\./g, '__');
+    }
+
+    getLessonPlanForLesson(lesson) {
+        const occurrencePlanId = this.getLessonPlanId(lesson);
+        return this.allLessonPlans[occurrencePlanId] || this.allLessonPlans[lesson.uid] || null;
+    }
+
+    isLessonDeleted(lesson) {
+        if (lesson.isManual) return false;
+        return this.deletedLessonIds.has(this.getLessonPlanId(lesson));
+    }
+
+    previousWeek() {
+        this.currentWeekStart.setDate(this.currentWeekStart.getDate() - 7);
         this.mobileDayOffset = 0;
         this.showLessonsForWeek();
     }
@@ -253,23 +591,43 @@ class LessonPlannerApp {
     filterLessons(searchTerm) {
         const search = searchTerm.toLowerCase();
         document.querySelectorAll('.lesson-card').forEach(card => {
-            const title = card.querySelector('.lesson-title').textContent.toLowerCase();
-            const venue = card.querySelector('.lesson-meta-item:nth-child(2) span').textContent.toLowerCase();
-            const visible = title.includes(search) || venue.includes(search);
+            let title = '';
+            let metaText = '';
+            const titleEl = card.querySelector('.lesson-title');
+            if (titleEl) title = titleEl.textContent.toLowerCase();
+            card.querySelectorAll('.lesson-meta-item').forEach(meta => {
+                metaText += ' ' + meta.textContent.toLowerCase();
+            });
+            const visible = title.includes(search) || metaText.includes(search);
             card.style.display = visible ? '' : 'none';
         });
     }
     
+    toggleViewMode() {
+        this.compressedMode = !this.compressedMode;
+        const btn = document.getElementById('viewToggleBtn');
+        btn.textContent = this.compressedMode ? 'Full View' : 'Compressed View';
+        this.showLessonsForWeek();
+    }
+    
     showLessonsForWeek() {
-        const weekLessons = ICSParser.getWeekLessons(this.expandedEvents, this.currentWeekStart);
+        const weekLessons = ICSParser
+            .getWeekLessons(this.expandedEvents, this.currentWeekStart)
+            .filter(lesson => !this.isLessonDeleted(lesson));
         let filteredLessons = this.applyFilter(weekLessons);
         
         uiService.updateWeekDisplay(this.currentWeekStart);
-        uiService.renderLessonsGrid(filteredLessons, this.allLessonPlans);
+        uiService.renderLessonsGrid(filteredLessons, (lesson) => this.getLessonPlanForLesson(lesson), this.compressedMode);
         
         // Also render mobile view
         this.renderMobileView();
         this.startCurrentTimeUpdater();
+        // Reapply search filter if any
+        if (this.currentSearchTerm) {
+            this.filterLessons(this.currentSearchTerm);
+            const input = document.getElementById('filterInput');
+            if (input) input.value = this.currentSearchTerm;
+        }
     }
     
     applyFilter(lessons) {
@@ -291,6 +649,7 @@ class LessonPlannerApp {
     }
     
     openLessonDetail(lesson, existingPlan = null) {
+        uiService.currentLessonPlanId = this.getLessonPlanId(lesson);
         uiService.openLessonModal(lesson, existingPlan);
     }
     
@@ -303,12 +662,8 @@ class LessonPlannerApp {
             
             const planData = uiService.getLessonPlanData();
             
-            if (!planData.title.trim()) {
-                UIService.showToast('Please enter a lesson plan title', 'error');
-                return;
-            }
-            
-            await FirebaseService.saveLessonPlan(uiService.currentLessonId, planData);
+            const lessonPlanId = uiService.currentLessonPlanId || uiService.currentLessonId;
+            await FirebaseService.saveLessonPlan(lessonPlanId, planData);
             UIService.showToast('Lesson plan saved successfully', 'success');
             uiService.closeLessonModal();
             
@@ -321,7 +676,7 @@ class LessonPlannerApp {
     loadCalendarFromFirebase(calendarData) {
         try {
             // Parse stored events - handle Firestore Timestamps and Date objects
-            this.allEvents = calendarData.events.map(e => ({
+            const storedEvents = calendarData.events.map(e => ({
                 uid: e.uid,
                 summary: e.summary,
                 location: e.location,
@@ -332,8 +687,9 @@ class LessonPlannerApp {
                 isManual: false
             }));
             
-            this.expandedEvents = [...this.allEvents];
-            UIService.showToast(`Loaded ${this.allEvents.length} events from ${calendarData.name}`, 'success');
+            // Expand recurring events on the client to keep Firestore payload compact.
+            this.expandedEvents = ICSParser.expandRecurrence(storedEvents);
+            this.allEvents = [...this.expandedEvents];
             this.showLessonsForWeek();
         } catch (error) {
             console.error('Error loading calendar from Firebase:', error);
@@ -351,9 +707,16 @@ class LessonPlannerApp {
         });
     }
 
+    setupDeletedLessonsListener() {
+        this.deletedLessonsUnsubscribe = FirebaseService.watchDeletedLessonOccurrences((deletedIds) => {
+            this.deletedLessonIds = new Set(deletedIds);
+            this.saveDeletedLessonsToLocalStorage();
+            this.showLessonsForWeek();
+        });
+    }
+
     async handleAddLesson() {
-        // Open modal in lesson creation mode
-        const uiService = new UIService();
+        // Open modal in lesson creation mode using the global uiService
         uiService.openLessonModalForCreate();
     }
 
@@ -378,6 +741,32 @@ class LessonPlannerApp {
         } catch (error) {
             console.error('Delete error:', error);
             UIService.showToast(error.message, 'error');
+        }
+    }
+
+    async deleteIcsLesson(lesson) {
+        const occurrenceId = this.getLessonPlanId(lesson);
+
+        // Optimistic local delete so the card disappears immediately.
+        this.deletedLessonIds.add(occurrenceId);
+        this.saveDeletedLessonsToLocalStorage();
+        this.showLessonsForWeek();
+        uiService.closeLessonModal();
+
+        try {
+            await FirebaseService.markLessonOccurrenceDeleted(occurrenceId, {
+                summary: lesson.summary,
+                dtstart: lesson.dtstart,
+                location: lesson.location || ''
+            });
+
+            // If notes existed for this occurrence, remove them as part of deletion.
+            await FirebaseService.deleteLessonPlan(occurrenceId);
+
+            UIService.showToast('Lesson deleted successfully', 'success');
+        } catch (error) {
+            console.error('Delete ICS lesson sync warning:', error);
+            UIService.showToast('Lesson deleted locally, but cloud sync failed. Please update Firestore rules.', 'warning');
         }
     }
 
@@ -412,6 +801,7 @@ class LessonPlannerApp {
         dayEnd.setHours(23, 59, 59, 999);
         
         const dayLessons = this.expandedEvents.filter(event => {
+            if (this.isLessonDeleted(event)) return false;
             const eventDate = new Date(event.dtstart);
             eventDate.setHours(0, 0, 0, 0);
             return eventDate.getTime() === dayStart.getTime();
@@ -458,9 +848,10 @@ class LessonPlannerApp {
             lessons.forEach(lesson => {
                 const card = document.createElement('div');
                 card.className = 'mobile-lesson-card';
+                card.style.borderLeftColor = uiService.getColorForClass(lesson.description);
                 
                 const duration = (lesson.dtend - lesson.dtstart) / 60000;
-                const existingPlan = this.allLessonPlans[lesson.uid];
+                const existingPlan = this.getLessonPlanForLesson(lesson);
                 
                 card.innerHTML = `
                     <div class="mobile-lesson-title">${uiService.escapeHtml(lesson.summary)}</div>
@@ -473,7 +864,8 @@ class LessonPlannerApp {
                 `;
                 
                 card.addEventListener('click', () => {
-                    UIService.app?.openLessonDetail(lesson, existingPlan);
+                    const freshPlan = this.getLessonPlanForLesson(lesson);
+                    UIService.app?.openLessonDetail(lesson, freshPlan);
                 });
                 
                 container.appendChild(card);

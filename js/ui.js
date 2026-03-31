@@ -3,8 +3,19 @@ class UIService {
     
     constructor() {
         this.currentLessonId = null;
+        this.currentLessonPlanId = null;
         this.resourceModal = null;
         this.initModals();
+    }
+
+    getColorForClass(className) {
+        if (!className) return '#3b82f6'; // default blue
+        const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#ec4899', '#14b8a6', '#facc15'];
+        let hash = 0;
+        for (let i = 0; i < className.length; i++) {
+            hash = className.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return colors[Math.abs(hash) % colors.length];
     }
     
     initModals() {
@@ -206,6 +217,7 @@ class UIService {
         this.lessonModal.classList.remove('show');
         document.body.style.overflow = 'auto';
         this.currentLessonId = null;
+        this.currentLessonPlanId = null;
         this.currentLesson = null;
         
         // Reset button text and mode
@@ -303,8 +315,15 @@ class UIService {
         return resources;
     }
     
-    renderLessonsGrid(lessons, existingPlans = {}) {
+    renderLessonsGrid(lessons, existingPlans = {}, isCompressed = false) {
         const container = document.getElementById('lessonsContainer');
+
+        const resolvePlan = (lesson) => {
+            if (typeof existingPlans === 'function') {
+                return existingPlans(lesson);
+            }
+            return existingPlans[lesson.uid] || null;
+        };
         
         if (lessons.length === 0) {
             container.innerHTML = `
@@ -323,7 +342,7 @@ class UIService {
         
         // Create timetable wrapper with Bootstrap
         const timetableWrapper = document.createElement('div');
-        timetableWrapper.className = 'timetable-wrapper';
+        timetableWrapper.className = `timetable-wrapper ${isCompressed ? 'compressed' : ''}`;
         
         // Create time column
         const timeColumn = document.createElement('div');
@@ -362,12 +381,6 @@ class UIService {
             dayDate.setDate(dayDate.getDate() + dayIndex);
             const dateStr = dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             
-            // Hide if day is in the past
-            if (dayDate < this.getTodayAtMidnight()) {
-                dayColumn.style.opacity = '0.5';
-                dayColumn.style.pointerEvents = 'none';
-            }
-            
             // Add day header
             const dayHeader = document.createElement('div');
             dayHeader.className = 'day-column-header';
@@ -405,7 +418,7 @@ class UIService {
                 const rowSpan = Math.max(1, Math.ceil(durationMinutes / 30));
                 const endRow = startRow + rowSpan;
                 
-                const card = this.createLessonCard(lesson, existingPlans[lesson.uid]);
+                const card = this.createLessonCard(lesson, resolvePlan(lesson), isCompressed);
                 card.classList.add('lesson-in-slot');
                 card.style.gridRowStart = startRow;
                 card.style.gridRowEnd = endRow;
@@ -472,9 +485,12 @@ class UIService {
         return today;
     }
     
-    createLessonCard(lesson, existingPlan) {
+    createLessonCard(lesson, existingPlan, isCompressed = false) {
         const card = document.createElement('div');
         card.className = 'lesson-card';
+        
+        // Set border color based on class (e.g., 4A, 4B)
+        card.style.borderLeftColor = this.getColorForClass(lesson.description);
         
         // Add type badge
         const isPractical = lesson.summary.includes('(P)');
@@ -493,26 +509,41 @@ class UIService {
         if (isMeeting) badgeHTML = '<span class="lesson-badge badge-meeting">Meeting</span>';
         if (isAssembly) badgeHTML = '<span class="lesson-badge badge-assembly">Assembly</span>';
         
-        card.innerHTML = `
-            <div class="lesson-card-header">
-                <span class="lesson-title">${this.escapeHtml(lesson.summary)}</span>
-            </div>
-            ${existingPlan && existingPlan.title ? `<div class="lesson-plan-title">${this.escapeHtml(existingPlan.title)}</div>` : ''}
-            <div class="lesson-meta">
-                <div class="lesson-meta-item">
-                    <span>${lesson.dtstart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} (${duration}m) | ${this.escapeHtml(lesson.location || 'N/A')}</span>
+        if (isCompressed) {
+            card.innerHTML = `
+                <div class="lesson-card-header">
+                    <span class="lesson-title">${this.escapeHtml(lesson.summary)}</span>
                 </div>
-            </div>
-            ${existingPlan && existingPlan.content ? `
-                <div class="lesson-notes">
-                    <div class="lesson-notes-content">${this.escapeHtml(existingPlan.content)}</div>
+                <div class="lesson-meta">
+                    <div class="lesson-meta-item">
+                        <span>${lesson.dtstart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} (${duration}m)</span>
+                    </div>
                 </div>
-            ` : ''}
-            ${isPlanned ? '<div class="lesson-status planned">✓ Lesson plan created</div>' : '<div class="lesson-status">Click to create plan</div>'}
-        `;
+                ${isPlanned ? '<div class="lesson-status planned">✓</div>' : '<div class="lesson-status">○</div>'}
+            `;
+        } else {
+            card.innerHTML = `
+                <div class="lesson-card-header">
+                    <span class="lesson-title">${this.escapeHtml(lesson.summary)}</span>
+                </div>
+                ${existingPlan && existingPlan.title ? `<div class="lesson-plan-title">${this.escapeHtml(existingPlan.title)}</div>` : ''}
+                <div class="lesson-meta">
+                    <div class="lesson-meta-item">
+                        <span>${lesson.dtstart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} (${duration}m) | ${this.escapeHtml(lesson.location || 'N/A')}</span>
+                    </div>
+                </div>
+                ${existingPlan && existingPlan.content ? `
+                    <div class="lesson-notes">
+                        <div class="lesson-notes-content">${this.escapeHtml(existingPlan.content)}</div>
+                    </div>
+                ` : ''}
+                ${isPlanned ? '<div class="lesson-status planned">✓ Lesson plan created</div>' : '<div class="lesson-status">Click to create plan</div>'}
+            `;
+        }
         
         card.addEventListener('click', () => {
-            UIService.app?.openLessonDetail(lesson, existingPlan);
+            const freshPlan = UIService.app?.getLessonPlanForLesson(lesson) ?? null;
+            UIService.app?.openLessonDetail(lesson, freshPlan);
         });
         
         return card;
@@ -560,8 +591,15 @@ class UIService {
         const deleteBtn = document.getElementById('deleteLessonBtn');
         deleteBtn.removeEventListener('click', this.deleteLessonHandler);
         this.deleteLessonHandler = async () => {
-            if (this.currentLessonId && this.currentLesson?.isManual) {
+            if (!this.currentLessonId) return;
+            if (this.currentLesson?.isManual) {
+                // Delete the manually created lesson
                 await appInstance.deleteLesson(this.currentLessonId);
+            } else if (this.currentLessonPlanId) {
+                // For ICS lessons: delete this lesson occurrence from the timetable
+                if (confirm('Delete this lesson from your timetable?')) {
+                    await appInstance.deleteIcsLesson(this.currentLesson);
+                }
             }
         };
         deleteBtn.addEventListener('click', this.deleteLessonHandler);
@@ -587,13 +625,23 @@ class UIService {
                     UIService.showToast(error.message, 'error');
                 }
             } else if (saveBtn.dataset.mode === 'edit') {
-                // Update existing lesson
+                // Update existing lesson metadata AND save lesson plan notes
                 const lessonData = this.getLessonData();
                 if (!lessonData.summary.trim()) {
                     UIService.showToast('Lesson name is required', 'error');
                     return;
                 }
-                await appInstance.updateLesson(this.currentLessonId, lessonData);
+                const planId = this.currentLessonPlanId || this.currentLessonId;
+                const planData = this.getLessonPlanData();
+                try {
+                    await FirebaseService.updateLesson(this.currentLessonId, lessonData);
+                    await FirebaseService.saveLessonPlan(planId, planData);
+                    UIService.showToast('Lesson updated successfully', 'success');
+                    uiService.closeLessonModal();
+                } catch (error) {
+                    console.error('Update error:', error);
+                    UIService.showToast(error.message, 'error');
+                }
             } else {
                 // Save lesson plan (original behavior)
                 await appInstance.saveLessonPlan();

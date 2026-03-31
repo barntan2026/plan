@@ -6,6 +6,7 @@
     <title>Lesson Planning Tool</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/modal.css">
 </head>
@@ -16,9 +17,11 @@
             <div class="header-content">
                 <h1>Lesson Planning Tool</h1>
                 <div class="header-controls">
-                    <button class="btn btn-primary" id="uploadBtn">Upload ICS File</button>
-                    <button class="btn btn-primary" id="addLessonBtn" style="display: none;">+ Add Lesson</button>
-                    <button class="btn btn-secondary" id="logoutBtn" style="display: none;">Logout</button>
+                    <button class="btn btn-primary btn-small" id="uploadBtn" title="Upload ICS"><i class="bi bi-upload"></i> Upload ICS</button>
+                    <button class="btn btn-primary btn-small" id="addLessonBtn" style="display: none;" title="Add Lesson"><i class="bi bi-plus-circle"></i> Add Lesson</button>
+                    <button class="btn btn-primary btn-small" id="clearRangeToggleBtn" style="display: none;" title="Delete"><i class="bi bi-trash"></i> Delete</button>
+                    <a class="btn btn-primary btn-small" id="adminPageLink" href="admin.html" style="display: none;" title="Admin"><i class="bi bi-people"></i> Admin</a>
+                    <button class="btn btn-primary btn-small" id="logoutBtn" style="display: none;" title="Logout"><i class="bi bi-box-arrow-right"></i> Logout</button>
                     <span id="userEmail" class="user-email"></span>
                 </div>
             </div>
@@ -55,11 +58,21 @@
                 <input type="text" id="filterInput" placeholder="Search lessons..." class="search-input">
                 <div class="filter-buttons">
                     <button class="filter-btn active" data-filter="all">All</button>
-                    <button class="filter-btn" data-filter="physics">Physics</button>
-                    <button class="filter-btn" data-filter="practical">Practical</button>
-                    <button class="filter-btn" data-filter="meeting">Meetings</button>
                 </div>
+                <button class="filter-btn" id="viewToggleBtn">Compressed View</button>
             </div>
+
+            <section class="range-clear-panel" id="rangeClearPanel" hidden>
+                <div class="range-clear-title">Clear Events by Date Range</div>
+                <div class="range-clear-controls">
+                    <label for="clearStartDate">From</label>
+                    <input type="date" id="clearStartDate" class="range-date-input">
+                    <label for="clearEndDate">To</label>
+                    <input type="date" id="clearEndDate" class="range-date-input">
+                    <button class="btn btn-danger" id="clearRangeBtn">Clear Events</button>
+                </div>
+                <p class="range-clear-hint">This clears manual lessons and hides ICS lessons within the selected dates.</p>
+            </section>
 
             <!-- Lessons Grid -->
             <div class="lessons-container" id="lessonsContainer">
@@ -84,7 +97,7 @@
     </div>
 
     <!-- Hidden File Input -->
-    <input type="file" id="icsFileInput" accept=".ics" style="display: none;">
+    <input type="file" id="icsFileInput" class="visually-hidden-file-input" accept=".ics,text/calendar">
 
     <!-- Lesson Detail Modal -->
     <div id="lessonModal" class="modal">

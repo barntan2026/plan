@@ -23,11 +23,6 @@ try {
     app = firebase.initializeApp(firebaseConfig);
     auth = firebase.auth();
     db = firebase.firestore();
-    
-    // Use cache settings for persistence (newer method)
-    db.settings({
-        cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED
-    });
 } catch (error) {
     console.error('Firebase initialization error:', error);
     console.warn('Please configure Firebase credentials in js/firebase-config.js');
