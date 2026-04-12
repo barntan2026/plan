@@ -1,3 +1,6 @@
+// Firebase Service - Handles all Firebase operations
+
+class FirebaseService {
     /**
      * Save or update student details in Firestore
      * @param {Object} student - { name, email, class }
@@ -13,6 +16,7 @@
                 .set({
                     name: student.name || '',
                     email: this.normalizeEmail(student.email),
+                    class: student.class || '',
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
             return true;
@@ -20,8 +24,6 @@
             throw new Error('Failed to save student: ' + error.message);
         }
     }
-// Firebase Service - Handles all Firebase operations
-class FirebaseService {
 
     static normalizeEmail(email) {
         return (email || '').trim().toLowerCase();
