@@ -6,6 +6,10 @@ class AdminPortal {
 
     async init() {
         this.setupEventListeners();
+<<<<<<< HEAD
+=======
+        this.setupCSVUpload();
+>>>>>>> 64ea449 (Fix calendar slot alignment and add test for 8am event row)
         FirebaseService.onAuthStateChanged((user) => this.onAuthStateChanged(user));
     }
 

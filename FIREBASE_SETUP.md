@@ -52,9 +52,27 @@ Your users can now sign in with their Google accounts!
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Global member access list (readable by authenticated users)
+    match /memberAccess/{memberId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid)/profile/role)
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)/profile/role).data.role == 'admin';
+    }
+
     // Only authenticated users can access their own data
     match /users/{userId} {
       allow read, write: if request.auth.uid == userId;
+
+      // User profile/role subcollection
+      match /profile/{document=**} {
+        allow read, write: if request.auth.uid == userId;
+      }
+
+      // Admin-managed members list under own user scope
+      match /members/{document=**} {
+        allow read, write: if request.auth.uid == userId;
+      }
       
       // Lesson plans subcollection
       match /lessonPlans/{document=**} {
@@ -63,6 +81,16 @@ service cloud.firestore {
       
       // Calendar data subcollection
       match /calendars/{document=**} {
+        allow read, write: if request.auth.uid == userId;
+      }
+
+      // Manually created lessons subcollection
+      match /lessons/{document=**} {
+        allow read, write: if request.auth.uid == userId;
+      }
+
+      // Deleted ICS lesson occurrences subcollection
+      match /deletedLessons/{document=**} {
         allow read, write: if request.auth.uid == userId;
       }
     }

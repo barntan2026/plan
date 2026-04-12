@@ -1,3 +1,25 @@
+    /**
+     * Save or update student details in Firestore
+     * @param {Object} student - { name, email, class }
+     */
+    static async saveStudentDetails(student) {
+        try {
+            const user = auth.currentUser;
+            if (!user) throw new Error('User not authenticated');
+            if (!student.email) throw new Error('Student email is required');
+            const docId = this.emailToDocId(student.email);
+            await db.collection('users').doc(user.uid)
+                .collection('students').doc(docId)
+                .set({
+                    name: student.name || '',
+                    email: this.normalizeEmail(student.email),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+            return true;
+        } catch (error) {
+            throw new Error('Failed to save student: ' + error.message);
+        }
+    }
 // Firebase Service - Handles all Firebase operations
 class FirebaseService {
 
@@ -14,61 +36,6 @@ class FirebaseService {
      */
     static async signUp(email, password) {
         try {
-            const result = await auth.createUserWithEmailAndPassword(email, password);
-            return result.user;
-        } catch (error) {
-            throw new Error(ICSParser.getFirebaseErrorMessage(error.code));
-        }
-    }
-    
-    /**
-     * Login user with email and password
-     */
-    static async login(email, password) {
-        try {
-            const result = await auth.signInWithEmailAndPassword(email, password);
-            return result.user;
-        } catch (error) {
-            throw new Error(this.getFirebaseErrorMessage(error.code));
-        }
-    }
-    
-    /**
-     * Sign in with Google
-     */
-    static async signInWithGoogle() {
-        try {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            const result = await auth.signInWithPopup(provider);
-            return result.user;
-        } catch (error) {
-            throw new Error(this.getFirebaseErrorMessage(error.code));
-        }
-    }
-    
-    /**
-     * Logout current user
-     */
-    static async logout() {
-        try {
-            await auth.signOut();
-        } catch (error) {
-            throw new Error('Failed to logout');
-        }
-    }
-
-    /**
-     * Ensure current user has an admin profile record.
-     */
-    static async ensureAdminProfile() {
-        try {
-            const user = auth.currentUser;
-            if (!user) throw new Error('User not authenticated');
-
-            await db.collection('users').doc(user.uid)
-                .collection('profile').doc('role')
-                .set({
-                    role: 'admin',
                     email: this.normalizeEmail(user.email),
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
@@ -213,6 +180,7 @@ class FirebaseService {
                 eventCount: events.length,
                 lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
                 events: events.map(e => ({
+<<<<<<< HEAD
                     uid: e.uid,
                     summary: e.summary,
                     dtstart: e.dtstart ? new Date(e.dtstart) : null,
@@ -236,8 +204,11 @@ class FirebaseService {
     static async getCalendarData() {
         try {
             const user = auth.currentUser;
+=======
+>>>>>>> 64ea449 (Fix calendar slot alignment and add test for 8am event row)
             if (!user) return null;
             
+
             const calendarDoc = await db.collection('users').doc(user.uid)
                 .collection('calendars').doc('default').get();
             
@@ -248,6 +219,30 @@ class FirebaseService {
                     // Convert Firestore Timestamp objects to Date objects
                     data.events = data.events.map(e => ({
                         ...e,
+
+                    /**
+                     * Save or update student details in Firestore
+                     * @param {Object} student - { name, email, class }
+                     */
+                    static async saveStudentDetails(student) {
+                        try {
+                            const user = auth.currentUser;
+                            if (!user) throw new Error('User not authenticated');
+                            if (!student.email) throw new Error('Student email is required');
+                            const docId = this.emailToDocId(student.email);
+                            await db.collection('users').doc(user.uid)
+                                .collection('students').doc(docId)
+                                .set({
+                                    name: student.name || '',
+                                    email: this.normalizeEmail(student.email),
+                                    class: student.class || '',
+                                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                                }, { merge: true });
+                            return true;
+                        } catch (error) {
+                            throw new Error('Failed to save student: ' + error.message);
+                        }
+                    }
                         dtstart: e.dtstart?.toDate ? e.dtstart.toDate() : new Date(e.dtstart),
                         dtend: e.dtend?.toDate ? e.dtend.toDate() : new Date(e.dtend)
                     }));

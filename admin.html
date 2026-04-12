@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson Planner - Admin</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <h1>Admin Portal</h1>
+                <div class="header-controls">
+                    <a class="btn btn-primary" href="index.html">Lesson Page</a>
+                    <button class="btn btn-secondary" id="logoutBtn" style="display: none;">Logout</button>
+                    <span id="userEmail" class="user-email"></span>
+                </div>
+            </div>
+        </header>
+
+        <div id="authSection" class="auth-section">
+            <div class="auth-container">
+                <h2>Admin Sign In</h2>
+                <button class="btn btn-google" id="googleSignInBtn">Sign in with Google</button>
+                <p class="auth-note">Only tan_seng_kwang@moe.edu.sg can access this page.</p>
+            </div>
+        </div>
+
+        <main id="mainSection" class="main-section" style="display: none;">
+            <section id="adminPanel" class="admin-panel" style="display: block;">
+                <div class="admin-panel-header">
+                    <h3>Member Management</h3>
+                    <p>Add and manage members.</p>
+                </div>
+                <div class="admin-panel-controls">
+                    <input type="email" id="memberEmailInput" class="search-input" placeholder="Enter member email address">
+                    <button class="btn btn-primary" id="addMemberBtn">Add Member</button>
+                </div>
+                <div id="membersList" class="members-list">
+                    <div class="empty-state"><p>No members added yet.</p></div>
+                </div>
+                <hr>
+                <div class="student-management">
+                    <h3>Student Management</h3>
+                    <p>Upload CSV to update student details (name, email, class):</p>
+                    <input type="file" id="csvUpload" accept=".csv" class="form-control mb-2">
+                    <button class="btn btn-success mb-2" id="uploadCsvBtn">Upload CSV</button>
+                    <div id="csvUploadStatus" class="text-success"></div>
+                </div>
+                <hr>
+                <div class="lesson-management">
+                    <h3>Lessons</h3>
+                    <div id="lessonCardsContainer">
+                        <!-- Lesson cards will be rendered here -->
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/firebase-service.js"></script>
+    <script src="js/admin.js"></script>
+</body>
+</html>
